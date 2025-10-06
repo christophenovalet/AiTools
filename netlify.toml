@@ -1,0 +1,8 @@
+[build]
+  command = "vite build"
+  publish = "dist"
+
+[dev]
+  command = "vite"
+  port = 5173
+  publish = "/"
