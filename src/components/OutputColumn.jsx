@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Copy, Send, Trash2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorder, onAddBlock }) {
+export function OutputColumn({ selectedBlocks, onClear, onReorder, onAddBlock }) {
   const [copied, setCopied] = useState(false)
   const [dragOverIndex, setDragOverIndex] = useState(-1)
   const [isDropZoneActive, setIsDropZoneActive] = useState(false)
@@ -12,7 +12,7 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
     return `[Block ${index + 1}]\n${block.text}`
   }).join('\n\n')
 
-  const finalText = assembledText + (selectedPrompt ? `\n\n---\n\n${selectedPrompt}` : '')
+  const finalText = assembledText
 
   const handleCopy = () => {
     navigator.clipboard.writeText(finalText).then(() => {
@@ -120,32 +120,21 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
                     }
                   }
                 }}
-                className={`p-3 bg-[#0a0a0a] rounded-lg border ${
-                  dragOverIndex === index ? 'border-blue-500' :
-                  dropTargetIndex === index ? 'border-green-500' :
-                  'border-gray-700'
+                className={`p-3 rounded-lg border-2 ${
+                  dragOverIndex === index ? 'border-blue-500 bg-[#0a0a0a]' :
+                  dropTargetIndex === index ? 'border-green-500 bg-[#0a0a0a]' :
+                  block.color ? `${block.color}` : 'bg-[#0a0a0a] border-gray-700'
                 } cursor-move`}
                 title="Drag to reorder"
               >
                 <div className="text-xs text-gray-500 mb-2 font-semibold">
-                  {block.columnTitle} / Block {block.blockNumber}
+                  {block.columnTitle} {block.blockNumber > 0 && `/ Block ${block.blockNumber}`}
                 </div>
                 <div className="text-gray-300 text-sm whitespace-pre-wrap">
                   {block.text}
                 </div>
               </div>
             ))}
-
-            {selectedPrompt && (
-              <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/30">
-                <div className="text-xs text-purple-400 mb-2 font-semibold">
-                  📌 Prompt
-                </div>
-                <div className="text-gray-300 text-sm whitespace-pre-wrap">
-                  {selectedPrompt}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

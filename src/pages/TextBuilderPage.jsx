@@ -28,7 +28,6 @@ export function TextBuilderPage({ onBackHome }) {
   ])
 
   const [selectedBlocks, setSelectedBlocks] = useState([])
-  const [selectedPrompt, setSelectedPrompt] = useState(null)
   const [nextId, setNextId] = useState(4)
   const [maximizedSourceId, setMaximizedSourceId] = useState(null)
 
@@ -45,7 +44,7 @@ export function TextBuilderPage({ onBackHome }) {
         'bg-green-500/20 border-green-500',
         'bg-yellow-500/20 border-yellow-500',
         'bg-red-500/20 border-red-500',
-        'bg-purple-500/20 border-purple-500'
+        'bg-orange-500/20 border-orange-500'
       ]
       setColumns([
         ...columns,
@@ -95,7 +94,6 @@ export function TextBuilderPage({ onBackHome }) {
 
   const clearOutput = () => {
     setSelectedBlocks([])
-    setSelectedPrompt(null)
   }
 
   const reorderSelectedBlocks = (fromIndex, toIndex) => {
@@ -141,8 +139,8 @@ export function TextBuilderPage({ onBackHome }) {
           {/* Prompt Library - Left side */}
           <div className="col-span-2 h-full min-h-0">
             <PromptLibrary
-              selectedPrompt={selectedPrompt}
-              onSelectPrompt={setSelectedPrompt}
+              selectedBlocks={selectedBlocks}
+              onToggleBlock={toggleBlock}
             />
           </div>
 
@@ -204,7 +202,6 @@ export function TextBuilderPage({ onBackHome }) {
           <div className="col-span-3 h-full min-h-0">
             <OutputColumn
               selectedBlocks={selectedBlocks}
-              selectedPrompt={selectedPrompt}
               onClear={clearOutput}
               onReorder={reorderSelectedBlocks}
               onAddBlock={addBlockFromDrop}

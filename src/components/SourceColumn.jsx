@@ -14,7 +14,8 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
       text: block.trim(),
       columnId: column.id,
       columnTitle: column.title,
-      blockNumber: index + 1
+      blockNumber: index + 1,
+      color: column.color
     }))
   }
 

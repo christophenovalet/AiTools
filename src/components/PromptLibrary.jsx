@@ -3,7 +3,7 @@ import { Plus, Copy, Trash2, Edit2, Check, X } from 'lucide-react'
 import { Button } from './ui/button'
 import promptsData from '@/data/prompts.json'
 
-export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
+export function PromptLibrary({ selectedBlocks, onToggleBlock }) {
   const [prompts, setPrompts] = useState(promptsData)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -35,8 +35,21 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
 
   const handleDeletePrompt = (id) => {
     setPrompts(prompts.filter(p => p.id !== id))
-    if (selectedPrompt && prompts.find(p => p.id === id)?.text === selectedPrompt) {
-      onSelectPrompt(null)
+    // Remove from selected blocks if it was selected
+    const promptToDelete = prompts.find(p => p.id === id)
+    if (promptToDelete) {
+      const blockId = `prompt-${id}`
+      const isSelected = selectedBlocks.some(sb => sb.id === blockId)
+      if (isSelected) {
+        const block = {
+          id: blockId,
+          text: promptToDelete.text,
+          columnId: 'prompt-library',
+          columnTitle: 'Prompt Library',
+          blockNumber: 0
+        }
+        onToggleBlock(block)
+      }
     }
   }
 
@@ -140,11 +153,29 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
           </div>
         )}
 
-        {filteredPrompts.map((prompt) => (
+        {filteredPrompts.map((prompt) => {
+          const block = {
+            id: `prompt-${prompt.id}`,
+            text: prompt.text,
+            columnId: 'prompt-library',
+            columnTitle: `🤖 ${prompt.title}`,
+            blockNumber: 0,
+            color: 'bg-purple-500/20 border-purple-500'
+          }
+          const isSelected = selectedBlocks.some(sb => sb.id === block.id)
+
+          return (
           <div
             key={prompt.id}
+            draggable={editingId !== prompt.id}
+            onDragStart={(e) => {
+              if (editingId === prompt.id) return
+              e.stopPropagation()
+              e.dataTransfer.effectAllowed = 'copy'
+              e.dataTransfer.setData('application/json', JSON.stringify(block))
+            }}
             className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-              selectedPrompt === prompt.text
+              isSelected
                 ? 'bg-purple-500/20 border-purple-500'
                 : 'bg-[#0a0a0a] border-gray-700 hover:border-gray-500'
             }`}
@@ -189,7 +220,7 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
             ) : (
               <>
                 <div
-                  onClick={() => onSelectPrompt(selectedPrompt === prompt.text ? null : prompt.text)}
+                  onClick={() => onToggleBlock(block)}
                   className="mb-2"
                 >
                   <div className="text-purple-400 font-semibold text-xs mb-1">
@@ -237,7 +268,8 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
               </>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="p-3 border-t border-gray-700 bg-[#0a0a0a]">
