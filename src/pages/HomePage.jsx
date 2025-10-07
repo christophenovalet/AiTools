@@ -1,6 +1,6 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { GitCompare, Type } from 'lucide-react'
+import { GitCompare, Type, Filter } from 'lucide-react'
 
 export function HomePage({ onSelectTool }) {
   const tools = [
@@ -22,6 +22,16 @@ export function HomePage({ onSelectTool }) {
       iconColor: 'text-blue-500',
       bgColor: 'bg-blue-500/10',
       borderColor: 'border-blue-500/30',
+      available: true
+    },
+    {
+      id: 'prompt-framework',
+      title: 'Prompt Framework',
+      description: 'Organize reusable prompt templates, frameworks, and principles. Copy snippets with one click.',
+      icon: Filter,
+      iconColor: 'text-purple-500',
+      bgColor: 'bg-purple-500/10',
+      borderColor: 'border-purple-500/30',
       available: true
     }
   ]
