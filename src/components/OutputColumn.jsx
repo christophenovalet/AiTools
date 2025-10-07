@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Copy, Send, Trash2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function OutputColumn({ selectedBlocks, onClear, onReorder, onAddBlock }) {
+export function OutputColumn({ selectedBlocks, onClear, onReorder, onAddBlock, onOpenPreview }) {
   const [copied, setCopied] = useState(false)
   const [dragOverIndex, setDragOverIndex] = useState(-1)
   const [isDropZoneActive, setIsDropZoneActive] = useState(false)
@@ -142,8 +142,14 @@ export function OutputColumn({ selectedBlocks, onClear, onReorder, onAddBlock })
       {selectedBlocks.length > 0 && (
         <div className="p-3 border-t border-gray-700 bg-[#0a0a0a] space-y-2">
           <Button
+            onClick={() => onOpenPreview && onOpenPreview(finalText)}
+            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold border border-gray-600 rounded-full"
+          >
+            Edit Preview
+          </Button>
+          <Button
             onClick={handleCopy}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold"
+            className="w-full bg-white hover:bg-gray-100 text-black font-semibold border border-gray-300 rounded-full"
           >
             <Copy className="mr-2 h-4 w-4" />
             {copied ? 'Copied!' : 'Copy to Clipboard'}

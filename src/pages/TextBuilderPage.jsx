@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { SourceColumn } from '@/components/SourceColumn'
 import { OutputColumn } from '@/components/OutputColumn'
 import { PromptLibrary } from '@/components/PromptLibrary'
+import { PreviewColumn } from '@/components/PreviewColumn'
 import { Button } from '@/components/ui/button'
 import { Plus, Home, X } from 'lucide-react'
 
@@ -30,6 +31,8 @@ export function TextBuilderPage({ onBackHome }) {
   const [selectedBlocks, setSelectedBlocks] = useState([])
   const [nextId, setNextId] = useState(4)
   const [maximizedSourceId, setMaximizedSourceId] = useState(null)
+  const [previewText, setPreviewText] = useState(null)
+  const scrollerRef = useRef(null)
 
   const updateColumn = (index, updatedColumn) => {
     const newColumns = [...columns]
@@ -106,6 +109,31 @@ export function TextBuilderPage({ onBackHome }) {
     })
   }
 
+  const openPreview = (text) => {
+    setPreviewText(text)
+    // auto-scroll slightly to the right to reveal the preview column while keeping output visible
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current
+      if (el) {
+        const delta = 420 + 16 // preview width + gap-4
+        el.scrollTo({ left: el.scrollLeft + delta, behavior: 'smooth' })
+      }
+    })
+  }
+
+  const closePreview = () => {
+    setPreviewText(null)
+    // auto-scroll slightly left to re-center content
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current
+      if (el) {
+        const delta = 420 + 16
+        const target = Math.max(0, el.scrollLeft - delta)
+        el.scrollTo({ left: target, behavior: 'smooth' })
+      }
+    })
+  }
+
   return (
     <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 p-4 gap-4">
@@ -135,9 +163,9 @@ export function TextBuilderPage({ onBackHome }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
+        <div ref={scrollerRef} className="flex gap-4 flex-1 min-h-0 overflow-x-auto pb-1">
           {/* Prompt Library - Left side */}
-          <div className="col-span-2 h-full min-h-0">
+          <div className="h-full min-h-0 w-[280px] flex-shrink-0">
             <PromptLibrary
               selectedBlocks={selectedBlocks}
               onToggleBlock={toggleBlock}
@@ -145,7 +173,7 @@ export function TextBuilderPage({ onBackHome }) {
           </div>
 
           {/* Source Columns - Middle */}
-          <div className="col-span-7 h-full min-h-0">
+          <div className="h-full min-h-0 flex-1 min-w-0">
             {maximizedSourceId ? (
               <div className="relative h-full min-h-0">
                 <Button
@@ -199,14 +227,22 @@ export function TextBuilderPage({ onBackHome }) {
           </div>
 
           {/* Output Column - Right side */}
-          <div className="col-span-3 h-full min-h-0">
+          <div className="h-full min-h-0 w-[360px] flex-shrink-0">
             <OutputColumn
               selectedBlocks={selectedBlocks}
               onClear={clearOutput}
               onReorder={reorderSelectedBlocks}
               onAddBlock={addBlockFromDrop}
+              onOpenPreview={openPreview}
             />
           </div>
+
+          {/* Preview Column - After Output */}
+          {previewText !== null && (
+            <div className="h-full min-h-0 w-[420px] flex-shrink-0">
+              <PreviewColumn text={previewText} onClose={closePreview} />
+            </div>
+          )}
         </div>
 
         <div className="text-center text-sm text-gray-500 flex-shrink-0">
