@@ -12,7 +12,9 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
     return blocks.map((block, index) => ({
       id: `${column.id}-${index}`,
       text: block.trim(),
-      columnId: column.id
+      columnId: column.id,
+      columnTitle: column.title,
+      blockNumber: index + 1
     }))
   }
 

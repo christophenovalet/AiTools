@@ -70,7 +70,7 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
                 title="Drag to reorder"
               >
                 <div className="text-xs text-gray-500 mb-2 font-semibold">
-                  Block {index + 1}
+                  {block.columnTitle} / Block {block.blockNumber}
                 </div>
                 <div className="text-gray-300 text-sm whitespace-pre-wrap">
                   {block.text}

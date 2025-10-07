@@ -22,6 +22,56 @@ const DEFAULT_PROMPTS = [
     id: 4,
     title: 'Improve',
     text: 'Please improve the clarity and flow of the above content while maintaining the core message.'
+  },
+  {
+    id: 5,
+    title: 'AS IS / TO BE',
+    text: 'Analyze the blocks above using the AS IS / TO BE framework:\n\nAS IS: Describe the current state (what is happening now)\nTO BE: Describe the expected state (what should happen)\nGAPS: Identify the gaps between current and expected state\n\nOutput in 3 distinct blocks. Keep your response concise (KISS), don\'t repeat (DRY), report facts instead of imagining what could happen.'
+  },
+  {
+    id: 6,
+    title: '5 WHYs',
+    text: 'Apply the 5 WHYs method to analyze the problem in the blocks above:\n\n1️⃣ Why does this problem occur?\n2️⃣ Why does that happen?\n3️⃣ Why is that the case?\n4️⃣ Why does that underlying issue exist?\n\nKeep your response concise (KISS), don\'t repeat (DRY), report facts instead of imagining what could happen.'
+  },
+  {
+    id: 7,
+    title: 'GIVEN / WHEN / THEN',
+    text: 'Structure the scenario in the blocks above using BDD format:\n\nGIVEN: the initial context and preconditions\nWHEN: the action or event that occurs\nTHEN: the expected outcome or result\n\nProvide a clear, testable scenario. Keep your response concise (KISS), don\'t repeat (DRY), report facts instead of imagining what could happen.'
+  },
+  {
+    id: 8,
+    title: 'IF / BUT / THEREFORE',
+    text: 'Analyze the logic in the blocks above using IF / BUT / THEREFORE:\n\nIF: the condition or assumption\nBUT: the contradiction or observed reality\nTHEREFORE: the logical conclusion or required action\n\nProvide a structured reasoning path.'
+  },
+  {
+    id: 9,
+    title: 'INPUT / PROCESS / OUTPUT',
+    text: 'Analyze the flow in the blocks above using INPUT / PROCESS / OUTPUT:\n\nINPUT: what data or trigger enters the system\nPROCESS: what transformation or logic is applied\nOUTPUT: what result is produced\n\nIdentify where issues may occur in this flow.'
+  },
+  {
+    id: 10,
+    title: 'CONTEXT / ACTION / RESULT',
+    text: 'Structure the observation in the blocks above using CAR:\n\nCONTEXT: the environment, conditions, and setup\nACTION: what was done or attempted\nRESULT: what happened as a consequence\n\nProvide a clear, reproducible description.'
+  },
+  {
+    id: 11,
+    title: 'PROBLEM / CAUSE / SOLUTION',
+    text: 'Analyze the issue in the blocks above using PROBLEM / CAUSE / SOLUTION:\n\nPROBLEM: what is not working as expected\nCAUSE: why it is happening (root cause)\nSOLUTION: how to fix it (concrete action)\n\nProvide a concise technical resolution.'
+  },
+  {
+    id: 12,
+    title: 'QUESTION / HYPOTHESIS / TEST / RESULT',
+    text: 'Apply the scientific method to analyze the blocks above:\n\nQUESTION: what are we trying to understand?\nHYPOTHESIS: what do we think is causing the issue?\nTEST: how can we validate or invalidate the hypothesis?\nRESULT: what did we discover?\n\nGuide an experimental approach to debugging.'
+  },
+  {
+    id: 13,
+    title: 'EXPECT / OBSERVE / DIFFERENCE',
+    text: 'Identify the discrepancy in the blocks above using:\n\nEXPECT: what should happen according to requirements\nOBSERVE: what actually happens in reality\nDIFFERENCE: what is the gap and why does it exist?\n\nProvide a clear analysis of the deviation.'
+  },
+  {
+    id: 14,
+    title: 'SMART Analysis',
+    text: 'Analyze the blocks above using the SMART framework:\n\nSpecific: what exactly is the issue?\nMeasurable: how can we quantify it?\nAchievable: what is a realistic solution?\nRelevant: why does this matter?\nTime-bound: what is the timeframe for resolution?\n\nProvide a structured, actionable analysis in 5 sentences maximum.'
   }
 ]
 
