@@ -1,9 +1,9 @@
 import React from 'react'
 import { TextBlock } from './TextBlock'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Maximize2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks }) {
+export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized }) {
   const parseTextIntoBlocks = (text) => {
     if (!text.trim()) return []
 
@@ -41,14 +41,27 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
         )}
       </div>
 
-      {/* Textarea - Fixed */}
+      {/* Textarea - Fixed with hover maximize button */}
       <div className="p-3 flex-shrink-0">
-        <textarea
-          value={column.text}
-          onChange={(e) => onUpdateText({ ...column, text: e.target.value })}
-          placeholder="Paste your text here. Use double line breaks to create separate blocks."
-          className="w-full h-24 bg-[#0a0a0a] text-gray-300 border border-gray-700 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-gray-500"
-        />
+        <div className="relative group">
+          <textarea
+            value={column.text}
+            onChange={(e) => onUpdateText({ ...column, text: e.target.value })}
+            placeholder="Paste your text here. Use double line breaks to create separate blocks."
+            className={`w-full ${isMaximized ? 'h-[60vh]' : 'h-24'} bg-[#0a0a0a] text-gray-300 border border-gray-700 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-gray-500`}
+          />
+          {!isMaximized && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onMaximize && onMaximize(column.id)}
+              className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-white hover:bg-gray-700/40"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Blocks area - Scrollable */}

@@ -3,7 +3,7 @@ import { SourceColumn } from '@/components/SourceColumn'
 import { OutputColumn } from '@/components/OutputColumn'
 import { PromptLibrary } from '@/components/PromptLibrary'
 import { Button } from '@/components/ui/button'
-import { Plus, Home } from 'lucide-react'
+import { Plus, Home, X } from 'lucide-react'
 
 export function TextBuilderPage({ onBackHome }) {
   const [columns, setColumns] = useState([
@@ -30,6 +30,7 @@ export function TextBuilderPage({ onBackHome }) {
   const [selectedBlocks, setSelectedBlocks] = useState([])
   const [selectedPrompt, setSelectedPrompt] = useState(null)
   const [nextId, setNextId] = useState(4)
+  const [maximizedSourceId, setMaximizedSourceId] = useState(null)
 
   const updateColumn = (index, updatedColumn) => {
     const newColumns = [...columns]
@@ -123,25 +124,57 @@ export function TextBuilderPage({ onBackHome }) {
           </div>
 
           {/* Source Columns - Middle */}
-          <div className={`col-span-7 grid gap-4 h-full min-h-0 ${
-            columns.length === 2 ? 'grid-cols-2' :
-            columns.length === 3 ? 'grid-cols-3' :
-            columns.length === 4 ? 'grid-cols-4' :
-            'grid-cols-5'
-          }`}>
-            {columns.map((column, index) => (
-              <div className="h-full min-h-0">
-                <SourceColumn
-                  key={column.id}
-                  column={column}
-                  onUpdateText={(updated) => updateColumn(index, updated)}
-                  onToggleBlock={toggleBlock}
-                  onRemove={() => removeColumn(index)}
-                  canRemove={columns.length > 2}
-                  selectedBlocks={selectedBlocks}
-                />
+          <div className="col-span-7 h-full min-h-0">
+            {maximizedSourceId ? (
+              <div className="relative h-full min-h-0">
+                <Button
+                  onClick={() => setMaximizedSourceId(null)}
+                  variant="ghost"
+                  className="absolute top-2 right-2 z-20 text-gray-300 hover:text-white hover:bg-gray-700/40"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Close
+                </Button>
+                <div className="h-full min-h-0">
+                  <SourceColumn
+                    key={maximizedSourceId}
+                    column={columns.find(c => c.id === maximizedSourceId) || columns[0]}
+                    onUpdateText={(updated) => {
+                      const idx = columns.findIndex(c => c.id === maximizedSourceId)
+                      if (idx !== -1) updateColumn(idx, updated)
+                    }}
+                    onToggleBlock={toggleBlock}
+                    onRemove={() => {}}
+                    canRemove={false}
+                    selectedBlocks={selectedBlocks}
+                    onMaximize={(id) => setMaximizedSourceId(id)}
+                    isMaximized={true}
+                  />
+                </div>
               </div>
-            ))}
+            ) : (
+              <div className={`grid gap-4 h-full min-h-0 ${
+                columns.length === 2 ? 'grid-cols-2' :
+                columns.length === 3 ? 'grid-cols-3' :
+                columns.length === 4 ? 'grid-cols-4' :
+                'grid-cols-5'
+              }`}>
+                {columns.map((column, index) => (
+                  <div className="h-full min-h-0" key={column.id}>
+                    <SourceColumn
+                      column={column}
+                      onUpdateText={(updated) => updateColumn(index, updated)}
+                      onToggleBlock={toggleBlock}
+                      onRemove={() => removeColumn(index)}
+                      canRemove={columns.length > 2}
+                      selectedBlocks={selectedBlocks}
+                      onMaximize={(id) => setMaximizedSourceId(id)}
+                      isMaximized={false}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Output Column - Right side */}
