@@ -2,9 +2,11 @@ import React, { useState } from 'react'
 import { Copy, Send, Trash2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorder }) {
+export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorder, onAddBlock }) {
   const [copied, setCopied] = useState(false)
   const [dragOverIndex, setDragOverIndex] = useState(-1)
+  const [isDropZoneActive, setIsDropZoneActive] = useState(false)
+  const [dropTargetIndex, setDropTargetIndex] = useState(-1)
 
   const assembledText = selectedBlocks.map((block, index) => {
     return `[Block ${index + 1}]\n${block.text}`
@@ -17,6 +19,33 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
+  }
+
+  const handleDropFromSource = (e, atIndex = null) => {
+    e.preventDefault()
+    setIsDropZoneActive(false)
+    setDropTargetIndex(-1)
+    try {
+      const blockData = e.dataTransfer.getData('application/json')
+      if (blockData) {
+        const block = JSON.parse(blockData)
+        onAddBlock && onAddBlock(block, atIndex)
+      }
+    } catch (error) {
+      console.error('Error parsing dropped block:', error)
+    }
+  }
+
+  const handleDragOverFromSource = (e) => {
+    e.preventDefault()
+    const hasBlockData = e.dataTransfer.types.includes('application/json')
+    if (hasBlockData) {
+      setIsDropZoneActive(true)
+    }
+  }
+
+  const handleDragLeaveFromSource = () => {
+    setIsDropZoneActive(false)
   }
 
   return (
@@ -37,10 +66,19 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div
+        className="flex-1 overflow-y-auto p-3"
+        onDrop={(e) => handleDropFromSource(e, dropTargetIndex >= 0 ? dropTargetIndex : null)}
+        onDragOver={handleDragOverFromSource}
+        onDragLeave={handleDragLeaveFromSource}
+      >
         {selectedBlocks.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm text-center">
-            Select blocks from the columns to build your document
+          <div className={`flex items-center justify-center h-full text-sm text-center transition-all ${
+            isDropZoneActive
+              ? 'text-blue-400 border-2 border-dashed border-blue-500 rounded-lg bg-blue-500/10'
+              : 'text-gray-500'
+          }`}>
+            {isDropZoneActive ? 'Drop block here to add it' : 'Select blocks from the columns to build your document'}
           </div>
         ) : (
           <div className="space-y-3">
@@ -54,19 +92,39 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorde
                 }}
                 onDragOver={(e) => {
                   e.preventDefault()
-                  setDragOverIndex(index)
-                }}
-                onDragLeave={() => setDragOverIndex(-1)}
-                onDragEnd={() => setDragOverIndex(-1)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
-                  setDragOverIndex(-1)
-                  if (!Number.isNaN(fromIndex) && fromIndex !== index && onReorder) {
-                    onReorder(fromIndex, index)
+                  const hasBlockData = e.dataTransfer.types.includes('application/json')
+                  if (hasBlockData) {
+                    setDropTargetIndex(index)
+                  } else {
+                    setDragOverIndex(index)
                   }
                 }}
-                className={`p-3 bg-[#0a0a0a] rounded-lg border ${dragOverIndex === index ? 'border-blue-500' : 'border-gray-700'} cursor-move`}
+                onDragLeave={() => {
+                  setDragOverIndex(-1)
+                  setDropTargetIndex(-1)
+                }}
+                onDragEnd={() => {
+                  setDragOverIndex(-1)
+                  setDropTargetIndex(-1)
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const blockData = e.dataTransfer.getData('application/json')
+                  if (blockData) {
+                    handleDropFromSource(e, index)
+                  } else {
+                    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
+                    setDragOverIndex(-1)
+                    if (!Number.isNaN(fromIndex) && fromIndex !== index && onReorder) {
+                      onReorder(fromIndex, index)
+                    }
+                  }
+                }}
+                className={`p-3 bg-[#0a0a0a] rounded-lg border ${
+                  dragOverIndex === index ? 'border-blue-500' :
+                  dropTargetIndex === index ? 'border-green-500' :
+                  'border-gray-700'
+                } cursor-move`}
                 title="Drag to reorder"
               >
                 <div className="text-xs text-gray-500 mb-2 font-semibold">

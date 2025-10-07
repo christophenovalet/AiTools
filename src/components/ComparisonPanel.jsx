@@ -100,7 +100,10 @@ export function ComparisonPanel({
             placeholder="Enter text to compare..."
             className="flex-1 h-full w-full resize-none bg-black/40 border-[#333333] text-gray-200 font-mono text-sm overflow-y-auto relative z-10 bg-transparent"
           />
-          <div className="absolute inset-0 pointer-events-none font-mono text-sm overflow-y-auto whitespace-pre-wrap break-words px-3 py-2">
+          <div
+            className="absolute inset-0 pointer-events-none font-mono text-sm overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-transparent select-none"
+            aria-hidden="true"
+          >
             {version.text.split('\n').map((line, index) => (
               <div
                 key={index}

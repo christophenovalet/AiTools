@@ -2,9 +2,19 @@ import React from 'react'
 import { Check } from 'lucide-react'
 
 export function TextBlock({ block, isSelected, onToggle, columnColor }) {
+  const handleDragStart = (e) => {
+    e.stopPropagation()
+    e.dataTransfer.effectAllowed = 'copy'
+    e.dataTransfer.setData('application/json', JSON.stringify(block))
+    // Fallback for environments that strip custom MIME types
+    e.dataTransfer.setData('text/plain', JSON.stringify(block))
+  }
+
   return (
     <div
       onClick={onToggle}
+      draggable
+      onDragStart={handleDragStart}
       className={`relative p-3 rounded-lg border-2 cursor-pointer transition-all ${
         isSelected
           ? `${columnColor} border-opacity-100 shadow-lg`

@@ -80,6 +80,19 @@ export function TextBuilderPage({ onBackHome }) {
     }
   }
 
+  const addBlockFromDrop = (block, atIndex = null) => {
+    const isAlreadySelected = selectedBlocks.some(sb => sb.id === block.id)
+    if (!isAlreadySelected) {
+      if (atIndex !== null && atIndex >= 0) {
+        const newBlocks = [...selectedBlocks]
+        newBlocks.splice(atIndex + 1, 0, block)
+        setSelectedBlocks(newBlocks)
+      } else {
+        setSelectedBlocks([...selectedBlocks, block])
+      }
+    }
+  }
+
   const clearOutput = () => {
     setSelectedBlocks([])
     setSelectedPrompt(null)
@@ -194,6 +207,7 @@ export function TextBuilderPage({ onBackHome }) {
               selectedPrompt={selectedPrompt}
               onClear={clearOutput}
               onReorder={reorderSelectedBlocks}
+              onAddBlock={addBlockFromDrop}
             />
           </div>
         </div>

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Copy, Home, Filter } from 'lucide-react'
 
 export function PromptFrameworkPage({ onBackHome }) {
-  const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle
+  const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle | tone
 
   const groups = useMemo(() => {
     const grouped = promptsData.reduce((acc, p) => {
@@ -14,7 +14,7 @@ export function PromptFrameworkPage({ onBackHome }) {
       return acc
     }, {})
     // Optional stable ordering
-    const order = ['template', 'framework', 'principle', 'uncategorized']
+    const order = ['template', 'framework', 'principle', 'tone', 'uncategorized']
     return order
       .filter(key => grouped[key]?.length)
       .map(key => ({ key, items: grouped[key] }))
@@ -34,6 +34,7 @@ export function PromptFrameworkPage({ onBackHome }) {
       case 'template': return 'Templates'
       case 'framework': return 'Frameworks'
       case 'principle': return 'Principles'
+      case 'tone': return 'Tone'
       default: return 'Other'
     }
   }
@@ -82,6 +83,13 @@ export function PromptFrameworkPage({ onBackHome }) {
               onClick={() => setActiveFilter('principle')}
             >
               Principles
+            </Button>
+            <Button
+              variant={activeFilter === 'tone' ? 'default' : 'ghost'}
+              className={activeFilter === 'tone' ? 'bg-purple-600 text-white' : 'text-gray-300'}
+              onClick={() => setActiveFilter('tone')}
+            >
+              Tone
             </Button>
           </div>
         </div>

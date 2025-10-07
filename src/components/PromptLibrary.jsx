@@ -8,7 +8,7 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [newPrompt, setNewPrompt] = useState({ title: '', text: '' })
-  const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle
+  const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle | tone
 
   const filteredPrompts = prompts.filter(p =>
     activeFilter === 'all' ? true : ((p.category ?? 'template') === activeFilter)
@@ -90,6 +90,13 @@ export function PromptLibrary({ selectedPrompt, onSelectPrompt }) {
               onClick={() => setActiveFilter('principle')}
             >
               Principles
+            </Button>
+            <Button
+              variant={activeFilter === 'tone' ? 'default' : 'ghost'}
+              className={activeFilter === 'tone' ? 'bg-purple-600 text-white h-7 px-2 text-xs col-span-2' : 'text-gray-300 h-7 px-2 text-xs col-span-2'}
+              onClick={() => setActiveFilter('tone')}
+            >
+              Tone
             </Button>
           </div>
         </div>
