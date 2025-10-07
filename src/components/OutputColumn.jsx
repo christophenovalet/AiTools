@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { Copy, Send, Trash2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function OutputColumn({ selectedBlocks, selectedPrompt, onClear }) {
+export function OutputColumn({ selectedBlocks, selectedPrompt, onClear, onReorder }) {
   const [copied, setCopied] = useState(false)
+  const [dragOverIndex, setDragOverIndex] = useState(-1)
 
   const assembledText = selectedBlocks.map((block, index) => {
     return `[Block ${index + 1}]\n${block.text}`
@@ -46,7 +47,27 @@ export function OutputColumn({ selectedBlocks, selectedPrompt, onClear }) {
             {selectedBlocks.map((block, index) => (
               <div
                 key={block.id}
-                className="p-3 bg-[#0a0a0a] rounded-lg border border-gray-700"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move'
+                  e.dataTransfer.setData('text/plain', String(index))
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOverIndex(index)
+                }}
+                onDragLeave={() => setDragOverIndex(-1)}
+                onDragEnd={() => setDragOverIndex(-1)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
+                  setDragOverIndex(-1)
+                  if (!Number.isNaN(fromIndex) && fromIndex !== index && onReorder) {
+                    onReorder(fromIndex, index)
+                  }
+                }}
+                className={`p-3 bg-[#0a0a0a] rounded-lg border ${dragOverIndex === index ? 'border-blue-500' : 'border-gray-700'} cursor-move`}
+                title="Drag to reorder"
               >
                 <div className="text-xs text-gray-500 mb-2 font-semibold">
                   Block {index + 1}

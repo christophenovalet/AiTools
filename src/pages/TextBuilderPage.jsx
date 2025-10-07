@@ -85,6 +85,16 @@ export function TextBuilderPage({ onBackHome }) {
     setSelectedPrompt(null)
   }
 
+  const reorderSelectedBlocks = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return
+    setSelectedBlocks(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
+    })
+  }
+
   return (
     <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 p-4 gap-4">
@@ -183,6 +193,7 @@ export function TextBuilderPage({ onBackHome }) {
               selectedBlocks={selectedBlocks}
               selectedPrompt={selectedPrompt}
               onClear={clearOutput}
+              onReorder={reorderSelectedBlocks}
             />
           </div>
         </div>
