@@ -9,7 +9,10 @@ export function OutputColumn({ selectedBlocks, onClear, onReorder, onAddBlock, o
   const [dropTargetIndex, setDropTargetIndex] = useState(-1)
 
   const assembledText = selectedBlocks.map((block, index) => {
-    return `[Block ${index + 1}]\n${block.text}`
+    const columnTitle = block.columnTitle && block.columnTitle !== 'Source 1'
+      ? `${block.columnTitle}\n${block.text}`
+      : block.text
+    return columnTitle
   }).join('\n\n')
 
   const finalText = assembledText

@@ -6,3 +6,8 @@
   command = "vite"
   port = 5173
   publish = "/"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
