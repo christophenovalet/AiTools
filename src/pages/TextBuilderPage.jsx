@@ -13,23 +13,11 @@ export function TextBuilderPage({ onBackHome }) {
       title: 'Source 1',
       text: '',
       color: 'bg-blue-500/20 border-blue-500'
-    },
-    {
-      id: 2,
-      title: 'Source 2',
-      text: '',
-      color: 'bg-green-500/20 border-green-500'
-    },
-    {
-      id: 3,
-      title: 'Source 3',
-      text: '',
-      color: 'bg-yellow-500/20 border-yellow-500'
     }
   ])
 
   const [selectedBlocks, setSelectedBlocks] = useState([])
-  const [nextId, setNextId] = useState(4)
+  const [nextId, setNextId] = useState(2)
   const [maximizedSourceId, setMaximizedSourceId] = useState(null)
   const [previewText, setPreviewText] = useState(null)
   const scrollerRef = useRef(null)
@@ -64,7 +52,7 @@ export function TextBuilderPage({ onBackHome }) {
   }
 
   const removeColumn = (index) => {
-    if (columns.length > 2) {
+    if (columns.length > 1) {
       const columnToRemove = columns[index]
       const newColumns = columns.filter((_, i) => i !== index)
       setColumns(newColumns)
@@ -248,6 +236,7 @@ export function TextBuilderPage({ onBackHome }) {
               </div>
             ) : (
               <div className={`grid gap-4 h-full min-h-0 ${
+                columns.length === 1 ? 'grid-cols-1' :
                 columns.length === 2 ? 'grid-cols-2' :
                 columns.length === 3 ? 'grid-cols-3' :
                 columns.length === 4 ? 'grid-cols-4' :
@@ -260,7 +249,7 @@ export function TextBuilderPage({ onBackHome }) {
                       onUpdateText={(updated) => updateColumn(index, updated)}
                       onToggleBlock={toggleBlock}
                       onRemove={() => removeColumn(index)}
-                      canRemove={columns.length > 2}
+                      canRemove={columns.length > 1}
                       selectedBlocks={selectedBlocks}
                       onMaximize={(id) => setMaximizedSourceId(id)}
                       isMaximized={false}
