@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { SourceColumn } from '@/components/SourceColumn'
 import { OutputColumn } from '@/components/OutputColumn'
-import { PromptLibrary } from '@/components/PromptLibrary'
+import { PromptTools } from '@/components/PromptTools'
 import { PreviewColumn } from '@/components/PreviewColumn'
 import { Button } from '@/components/ui/button'
 import { Plus, Home, X } from 'lucide-react'
@@ -33,6 +33,7 @@ export function TextBuilderPage({ onBackHome }) {
   const [maximizedSourceId, setMaximizedSourceId] = useState(null)
   const [previewText, setPreviewText] = useState(null)
   const scrollerRef = useRef(null)
+  const [focusedTextareaRef, setFocusedTextareaRef] = useState(null)
 
   const updateColumn = (index, updatedColumn) => {
     const newColumns = [...columns]
@@ -134,6 +135,44 @@ export function TextBuilderPage({ onBackHome }) {
     })
   }
 
+  const insertTag = (tagName) => {
+    if (!focusedTextareaRef?.current) return
+
+    const textarea = focusedTextareaRef.current
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const text = textarea.value
+    const selectedText = text.substring(start, end)
+
+    // Wrap selected text with tag, or insert empty tag pair if no selection
+    const newText = selectedText
+      ? `<${tagName}>${selectedText}</${tagName}>`
+      : `<${tagName}></${tagName}>`
+
+    // Calculate cursor position (inside the tag if no selection)
+    const cursorOffset = selectedText ? newText.length : tagName.length + 2
+
+    // Insert the new text
+    const newValue = text.substring(0, start) + newText + text.substring(end)
+
+    // Update the column that owns this textarea
+    // We need to find which column this textarea belongs to
+    // We can do this by storing the column index with the ref
+    // For now, let's trigger a synthetic change event
+    textarea.value = newValue
+    const event = new Event('input', { bubbles: true })
+    textarea.dispatchEvent(event)
+
+    // Restore focus and cursor position
+    textarea.focus()
+    const newCursorPos = selectedText ? start + newText.length : start + cursorOffset
+    textarea.setSelectionRange(newCursorPos, newCursorPos)
+  }
+
+  const handleTextareaFocus = (textareaRef) => {
+    setFocusedTextareaRef(textareaRef)
+  }
+
   return (
     <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 p-4 gap-4">
@@ -164,11 +203,12 @@ export function TextBuilderPage({ onBackHome }) {
         </div>
 
         <div ref={scrollerRef} className="flex gap-4 flex-1 min-h-0 overflow-x-auto pb-1">
-          {/* Prompt Library - Left side */}
+          {/* Prompt Tools - Left side */}
           <div className="h-full min-h-0 w-[280px] flex-shrink-0">
-            <PromptLibrary
+            <PromptTools
               selectedBlocks={selectedBlocks}
               onToggleBlock={toggleBlock}
+              onInsertTag={insertTag}
             />
           </div>
 
@@ -198,6 +238,7 @@ export function TextBuilderPage({ onBackHome }) {
                     selectedBlocks={selectedBlocks}
                     onMaximize={(id) => setMaximizedSourceId(id)}
                     isMaximized={true}
+                    onTextareaFocus={handleTextareaFocus}
                   />
                 </div>
               </div>
@@ -219,6 +260,7 @@ export function TextBuilderPage({ onBackHome }) {
                       selectedBlocks={selectedBlocks}
                       onMaximize={(id) => setMaximizedSourceId(id)}
                       isMaximized={false}
+                      onTextareaFocus={handleTextareaFocus}
                     />
                   </div>
                 ))}

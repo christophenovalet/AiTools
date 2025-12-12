@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { TextBlock } from './TextBlock'
 import { Trash2, Maximize2 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized }) {
+export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onTextareaFocus }) {
+  const textareaRef = useRef(null)
+
   const parseTextIntoBlocks = (text) => {
     if (!text.trim()) return []
 
@@ -48,8 +50,10 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
       <div className="p-3 flex-shrink-0">
         <div className="relative group">
           <textarea
+            ref={textareaRef}
             value={column.text}
             onChange={(e) => onUpdateText({ ...column, text: e.target.value })}
+            onFocus={() => onTextareaFocus && onTextareaFocus(textareaRef)}
             placeholder="Paste your text here. Use double line breaks to create separate blocks."
             className={`w-full ${isMaximized ? 'h-[60vh]' : 'h-24'} bg-[#0a0a0a] text-gray-300 border border-gray-700 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-gray-500`}
           />
