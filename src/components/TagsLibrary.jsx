@@ -1,25 +1,27 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Copy, Trash2, Edit2, Check, X } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X } from 'lucide-react'
 import { Button } from './ui/button'
+import tagsData from '@/data/tags.json'
 
 const STORAGE_KEY = 'textbuilder-tags'
-
-const defaultTags = [
-  { id: 1, name: 'context', description: 'Provide background information' },
-  { id: 2, name: 'task', description: 'Define the main task' },
-  { id: 3, name: 'example', description: 'Show examples' },
-  { id: 4, name: 'constraints', description: 'Set limitations or rules' },
-  { id: 5, name: 'output', description: 'Specify desired output format' },
-]
 
 export function TagsLibrary({ onInsertTag }) {
   const [tags, setTags] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : defaultTags
+    return stored ? JSON.parse(stored) : tagsData
   })
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [newTag, setNewTag] = useState({ name: '', description: '' })
+  const [filter, setFilter] = useState('')
+
+  // Sort alphabetically and filter by search term
+  const filteredTags = tags
+    .filter(tag =>
+      tag.name.toLowerCase().includes(filter.toLowerCase()) ||
+      (tag.description && tag.description.toLowerCase().includes(filter.toLowerCase()))
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   // Save to localStorage whenever tags change
   useEffect(() => {
@@ -49,10 +51,6 @@ export function TagsLibrary({ onInsertTag }) {
     setTags(tags.filter(t => t.id !== id))
   }
 
-  const handleCopyTag = (name) => {
-    navigator.clipboard.writeText(`<${name}></${name}>`)
-  }
-
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-cyan-500/50 overflow-hidden">
       <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-[#0a0a0a]">
@@ -67,7 +65,18 @@ export function TagsLibrary({ onInsertTag }) {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Filter input */}
+      <div className="px-3 pt-2">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter tags..."
+          className="w-full bg-[#0a0a0a] text-gray-100 text-xs border border-gray-700 rounded px-2 py-1.5 outline-none focus:border-cyan-500"
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
         {isAdding && (
           <div className="p-3 bg-[#0a0a0a] rounded-lg border border-cyan-500/30 space-y-2">
             <input
@@ -108,11 +117,11 @@ export function TagsLibrary({ onInsertTag }) {
           </div>
         )}
 
-        {tags.map((tag) => {
+        {filteredTags.map((tag) => {
           return (
             <div
               key={tag.id}
-              className="p-3 rounded-lg border-2 cursor-pointer transition-all bg-[#0a0a0a] border-gray-700 hover:border-cyan-500"
+              className="p-2 rounded-lg border-2 cursor-pointer transition-all bg-[#0a0a0a] border-gray-700 hover:border-cyan-500"
             >
               {editingId === tag.id ? (
                 <div className="space-y-2">
@@ -152,56 +161,42 @@ export function TagsLibrary({ onInsertTag }) {
                   </div>
                 </div>
               ) : (
-                <>
-                  <div
-                    onClick={() => onInsertTag && onInsertTag(tag.name)}
-                    className="mb-2"
-                  >
-                    <div className="text-cyan-400 font-mono font-semibold text-xs mb-1">
-                      &lt;{tag.name}&gt;&lt;/{tag.name}&gt;
+                <div onClick={() => onInsertTag && onInsertTag(tag.name)}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="inline-block px-2 py-0.5 bg-cyan-500 text-black font-bold text-[10px] rounded-full uppercase">
+                      {tag.name}
                     </div>
-                    {tag.description && (
-                      <div className="text-gray-400 text-xs">
-                        {tag.description}
-                      </div>
-                    )}
+                    <div className="flex gap-0.5 flex-shrink-0">
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingId(tag.id)
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-400 hover:text-gray-300 h-5 w-5 p-0"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteTag(tag.id)
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-400 h-5 w-5 p-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-1 mt-2">
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCopyTag(tag.name)
-                      }}
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-gray-300 h-6 px-2"
-                    >
-                      <Copy className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingId(tag.id)
-                      }}
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-gray-300 h-6 px-2"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteTag(tag.id)
-                      }}
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-500 hover:text-red-400 h-6 px-2"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </>
+                  {tag.description && (
+                    <div className="text-gray-400 text-[11px] leading-tight">
+                      {tag.description}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )

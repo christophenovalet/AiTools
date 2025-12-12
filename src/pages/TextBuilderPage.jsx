@@ -144,28 +144,44 @@ export function TextBuilderPage({ onBackHome }) {
     const text = textarea.value
     const selectedText = text.substring(start, end)
 
-    // Wrap selected text with tag, or insert empty tag pair if no selection
-    const newText = selectedText
-      ? `<${tagName}>${selectedText}</${tagName}>`
-      : `<${tagName}></${tagName}>`
+    // Check if we're at the start of a line
+    const beforeText = text.substring(0, start)
+    const lastNewline = beforeText.lastIndexOf('\n')
+    const lineStart = lastNewline === -1 ? 0 : lastNewline + 1
+    const isAtLineStart = beforeText.substring(lineStart).trim() === ''
 
-    // Calculate cursor position (inside the tag if no selection)
-    const cursorOffset = selectedText ? newText.length : tagName.length + 2
+    // Check if we're at the end of a line
+    const afterText = text.substring(end)
+    const nextNewline = afterText.indexOf('\n')
+    const isAtLineEnd = (nextNewline === -1 ? afterText : afterText.substring(0, nextNewline)).trim() === ''
+
+    // Build the tag structure with proper formatting
+    let newText
+    let cursorOffset
+
+    if (selectedText) {
+      // Wrap selected text with indented tag structure
+      const indentedContent = selectedText.split('\n').map(line => '    ' + line).join('\n')
+      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      cursorOffset = newText.length
+    } else {
+      // Insert empty tag structure with cursor positioned in indented area
+      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n    \n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      // Position cursor at the indented line (after the opening tag + newline + 4 spaces)
+      cursorOffset = (isAtLineStart ? 0 : 1) + tagName.length + 2 + 1 + 4
+    }
 
     // Insert the new text
     const newValue = text.substring(0, start) + newText + text.substring(end)
 
-    // Update the column that owns this textarea
-    // We need to find which column this textarea belongs to
-    // We can do this by storing the column index with the ref
-    // For now, let's trigger a synthetic change event
+    // Update the textarea value and trigger change event
     textarea.value = newValue
     const event = new Event('input', { bubbles: true })
     textarea.dispatchEvent(event)
 
     // Restore focus and cursor position
     textarea.focus()
-    const newCursorPos = selectedText ? start + newText.length : start + cursorOffset
+    const newCursorPos = start + cursorOffset
     textarea.setSelectionRange(newCursorPos, newCursorPos)
   }
 
