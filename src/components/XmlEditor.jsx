@@ -1,8 +1,9 @@
 import React, { useCallback, useRef, useImperativeHandle, forwardRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { xml } from '@codemirror/lang-xml'
+import { foldAll, unfoldAll } from '@codemirror/language'
 import { Button } from './ui/button'
-import { WrapText } from 'lucide-react'
+import { WrapText, ChevronsDownUp, ChevronsUpDown, Copy } from 'lucide-react'
 
 // XML formatting function
 export function formatXml(xmlString) {
@@ -49,7 +50,8 @@ const XmlEditor = forwardRef(function XmlEditor({
   value,
   onChange,
   placeholder = 'Enter XML content...',
-  height = '200px',
+  minHeight = '150px',
+  maxHeight = '400px',
   showToolbar = true,
   onFocus
 }, ref) {
@@ -95,10 +97,44 @@ const XmlEditor = forwardRef(function XmlEditor({
     onChange(formatted)
   }, [value, onChange])
 
+  const handleCollapseAll = useCallback(() => {
+    const view = editorRef.current?.view
+    if (view) foldAll(view)
+  }, [])
+
+  const handleExpandAll = useCallback(() => {
+    const view = editorRef.current?.view
+    if (view) unfoldAll(view)
+  }, [])
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(value)
+  }, [value])
+
   return (
     <div className="flex flex-col h-full">
       {showToolbar && (
-        <div className="flex gap-1 mb-1 justify-end">
+        <div className="flex gap-1 mb-1 justify-start">
+          <Button
+            onClick={handleExpandAll}
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-cyan-400 h-6 px-2 text-xs"
+            title="Expand all"
+          >
+            <ChevronsUpDown className="w-3 h-3 mr-1" />
+            Expand
+          </Button>
+          <Button
+            onClick={handleCollapseAll}
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-cyan-400 h-6 px-2 text-xs"
+            title="Collapse all"
+          >
+            <ChevronsDownUp className="w-3 h-3 mr-1" />
+            Collapse
+          </Button>
           <Button
             onClick={handleFormat}
             variant="ghost"
@@ -109,9 +145,19 @@ const XmlEditor = forwardRef(function XmlEditor({
             <WrapText className="w-3 h-3 mr-1" />
             Format
           </Button>
+          <Button
+            onClick={handleCopy}
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-cyan-400 h-6 px-2 text-xs"
+            title="Copy to clipboard"
+          >
+            <Copy className="w-3 h-3 mr-1" />
+            Copy
+          </Button>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-hidden rounded-lg" style={{ height }}>
+      <div className="flex-1 min-h-0 overflow-auto rounded-lg">
         <CodeMirror
           ref={editorRef}
           value={value}
@@ -119,7 +165,8 @@ const XmlEditor = forwardRef(function XmlEditor({
           extensions={[xml()]}
           theme="dark"
           placeholder={placeholder}
-          height={height}
+          minHeight={minHeight}
+          maxHeight={maxHeight}
           onFocus={onFocus}
           basicSetup={{
             lineNumbers: true,

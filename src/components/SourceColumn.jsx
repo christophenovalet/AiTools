@@ -56,7 +56,8 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
             onChange={(value) => onUpdateText({ ...column, text: value })}
             onFocus={() => onEditorFocus && onEditorFocus(editorRef)}
             placeholder="Paste your XML/text here..."
-            height={isMaximized ? '100%' : '150px'}
+            minHeight={isMaximized ? '100%' : '150px'}
+            maxHeight={isMaximized ? '100%' : '500px'}
             showToolbar={true}
           />
           {!isMaximized && (
