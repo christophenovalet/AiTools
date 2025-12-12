@@ -2,9 +2,10 @@ import React, { useRef } from 'react'
 import { TextBlock } from './TextBlock'
 import { Trash2, Maximize2 } from 'lucide-react'
 import { Button } from './ui/button'
+import XmlEditor from './XmlEditor'
 
-export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onTextareaFocus }) {
-  const textareaRef = useRef(null)
+export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onEditorFocus }) {
+  const editorRef = useRef(null)
 
   const parseTextIntoBlocks = (text) => {
     if (!text.trim()) return []
@@ -46,16 +47,17 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
         )}
       </div>
 
-      {/* Textarea - Fixed with hover maximize button */}
-      <div className="p-3 flex-shrink-0">
-        <div className="relative group">
-          <textarea
-            ref={textareaRef}
+      {/* XML Editor */}
+      <div className={`p-3 ${isMaximized ? 'flex-1 min-h-0' : 'flex-shrink-0'}`}>
+        <div className="relative group h-full">
+          <XmlEditor
+            ref={editorRef}
             value={column.text}
-            onChange={(e) => onUpdateText({ ...column, text: e.target.value })}
-            onFocus={() => onTextareaFocus && onTextareaFocus(textareaRef)}
-            placeholder="Paste your text here. Use double line breaks to create separate blocks."
-            className={`w-full ${isMaximized ? 'h-[60vh]' : 'h-24'} bg-[#0a0a0a] text-gray-300 border border-gray-700 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-gray-500`}
+            onChange={(value) => onUpdateText({ ...column, text: value })}
+            onFocus={() => onEditorFocus && onEditorFocus(editorRef)}
+            placeholder="Paste your XML/text here..."
+            height={isMaximized ? '100%' : '150px'}
+            showToolbar={true}
           />
           {!isMaximized && (
             <Button
@@ -63,9 +65,9 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
               variant="ghost"
               size="icon"
               onClick={() => onMaximize && onMaximize(column.id)}
-              className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-white hover:bg-gray-700/40"
+              className="absolute top-0 right-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-white hover:bg-gray-700/40"
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3 h-3" />
             </Button>
           )}
         </div>

@@ -138,11 +138,12 @@ export function TextBuilderPage({ onBackHome }) {
   const insertTag = (tagName) => {
     if (!focusedTextareaRef?.current) return
 
-    const textarea = focusedTextareaRef.current
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const text = textarea.value
-    const selectedText = text.substring(start, end)
+    const editor = focusedTextareaRef.current
+    const selection = editor.getSelection()
+    const text = editor.getValue()
+    const start = selection.start
+    const end = selection.end
+    const selectedText = selection.text
 
     // Check if we're at the start of a line
     const beforeText = text.substring(0, start)
@@ -157,36 +158,23 @@ export function TextBuilderPage({ onBackHome }) {
 
     // Build the tag structure with proper formatting
     let newText
-    let cursorOffset
 
     if (selectedText) {
       // Wrap selected text with indented tag structure
-      const indentedContent = selectedText.split('\n').map(line => '    ' + line).join('\n')
+      const indentedContent = selectedText.split('\n').map(line => '\t' + line).join('\n')
       newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
-      cursorOffset = newText.length
     } else {
       // Insert empty tag structure with cursor positioned in indented area
-      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n    \n</${tagName}>${isAtLineEnd ? '' : '\n'}`
-      // Position cursor at the indented line (after the opening tag + newline + 4 spaces)
-      cursorOffset = (isAtLineStart ? 0 : 1) + tagName.length + 2 + 1 + 4
+      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
     }
 
-    // Insert the new text
-    const newValue = text.substring(0, start) + newText + text.substring(end)
-
-    // Update the textarea value and trigger change event
-    textarea.value = newValue
-    const event = new Event('input', { bubbles: true })
-    textarea.dispatchEvent(event)
-
-    // Restore focus and cursor position
-    textarea.focus()
-    const newCursorPos = start + cursorOffset
-    textarea.setSelectionRange(newCursorPos, newCursorPos)
+    // Insert the new text using editor method
+    editor.replaceSelection(newText)
+    editor.focus()
   }
 
-  const handleTextareaFocus = (textareaRef) => {
-    setFocusedTextareaRef(textareaRef)
+  const handleEditorFocus = (editorRef) => {
+    setFocusedTextareaRef(editorRef)
   }
 
   return (
@@ -254,7 +242,7 @@ export function TextBuilderPage({ onBackHome }) {
                     selectedBlocks={selectedBlocks}
                     onMaximize={(id) => setMaximizedSourceId(id)}
                     isMaximized={true}
-                    onTextareaFocus={handleTextareaFocus}
+                    onEditorFocus={handleEditorFocus}
                   />
                 </div>
               </div>
@@ -276,7 +264,7 @@ export function TextBuilderPage({ onBackHome }) {
                       selectedBlocks={selectedBlocks}
                       onMaximize={(id) => setMaximizedSourceId(id)}
                       isMaximized={false}
-                      onTextareaFocus={handleTextareaFocus}
+                      onEditorFocus={handleEditorFocus}
                     />
                   </div>
                 ))}
