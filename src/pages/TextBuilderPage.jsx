@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { SourceColumn } from '@/components/SourceColumn'
 import { OutputColumn } from '@/components/OutputColumn'
 import { PromptTools } from '@/components/PromptTools'
@@ -6,10 +6,12 @@ import { PreviewColumn } from '@/components/PreviewColumn'
 import { TagsOverlay } from '@/components/TagsOverlay'
 import { SaveToProjectModal } from '@/components/SaveToProjectModal'
 import { ProjectsModal } from '@/components/ProjectsModal'
+import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
+import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X, Trash2, FolderOpen, Save } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare } from 'lucide-react'
 
-export function TextBuilderPage({ onBackHome }) {
+export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [columns, setColumns] = useState([
     {
       id: 1,
@@ -31,16 +33,84 @@ export function TextBuilderPage({ onBackHome }) {
   const [showProjectsModal, setShowProjectsModal] = useState(false)
   const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId }
 
-  // Keyboard shortcut: Ctrl+Shift+Space to open tags overlay
+  // Chatbot state
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false)
+  const [chatbotInput, setChatbotInput] = useState('')
+  const [selectionToolbar, setSelectionToolbar] = useState({
+    visible: false,
+    position: null,
+    text: ''
+  })
+
+  // Keyboard shortcut: Ctrl+Shift+Space to toggle tags overlay
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
         e.preventDefault()
-        setShowTagsOverlay(true)
+        setShowTagsOverlay(prev => !prev)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Handle text selection for toolbar
+  const handleSelectionCheck = useCallback(() => {
+    if (!focusedTextareaRef?.current) {
+      setSelectionToolbar({ visible: false, position: null, text: '' })
+      return
+    }
+
+    const editor = focusedTextareaRef.current
+    const selection = editor.getSelection()
+
+    if (selection.text && selection.text.length > 0) {
+      const coords = editor.getSelectionCoords()
+      if (coords) {
+        setSelectionToolbar({
+          visible: true,
+          position: coords,
+          text: selection.text
+        })
+      }
+    } else {
+      setSelectionToolbar({ visible: false, position: null, text: '' })
+    }
+  }, [focusedTextareaRef])
+
+  // Listen for mouseup to check selection
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setTimeout(handleSelectionCheck, 10)
+    }
+    const handleKeyUp = (e) => {
+      if (e.shiftKey) {
+        setTimeout(handleSelectionCheck, 10)
+      }
+    }
+    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [handleSelectionCheck])
+
+  // Any key to close selection toolbar
+  useEffect(() => {
+    if (!selectionToolbar.visible) return
+    const handleKeyDown = () => {
+      setSelectionToolbar({ visible: false, position: null, text: '' })
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectionToolbar.visible])
+
+  // Handle toolbar action
+  const handleToolbarAction = useCallback((formattedPrompt) => {
+    setChatbotInput(formattedPrompt)
+    setIsChatbotOpen(true)
+    setSelectionToolbar({ visible: false, position: null, text: '' })
   }, [])
 
   const updateColumn = (index, updatedColumn) => {
@@ -166,6 +236,7 @@ export function TextBuilderPage({ onBackHome }) {
 
     // Build the tag structure with proper formatting
     let newText
+    let cursorOffset = null
 
     if (selectedText) {
       // Wrap selected text with indented tag structure
@@ -173,11 +244,14 @@ export function TextBuilderPage({ onBackHome }) {
       newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
     } else {
       // Insert empty tag structure with cursor positioned in indented area
-      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      const prefix = isAtLineStart ? '' : '\n'
+      newText = `${prefix}<${tagName}>\n\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      // Position cursor after the tab (inside the tag)
+      cursorOffset = prefix.length + 1 + tagName.length + 1 + 1 + 1 // prefix + < + tagName + > + \n + \t
     }
 
     // Insert the new text using editor method
-    editor.replaceSelection(newText)
+    editor.replaceSelection(newText, cursorOffset)
     editor.focus()
   }
 
@@ -293,10 +367,20 @@ export function TextBuilderPage({ onBackHome }) {
               <FolderOpen className="mr-2 h-4 w-4" />
               Projects
             </Button>
-            <h1 className="text-3xl font-bold text-gray-100">TextBuilder</h1>
+            <h1 className="text-3xl font-bold text-gray-100">Prompt Designer</h1>
           </div>
 
           <div className="flex gap-3 items-center">
+            <Button
+              onClick={() => setIsChatbotOpen(prev => !prev)}
+              variant={isChatbotOpen ? "default" : "ghost"}
+              className={isChatbotOpen
+                ? "bg-cyan-600 hover:bg-cyan-500 text-white font-semibold"
+                : "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              AI Chat
+            </Button>
             <Button
               onClick={handleSaveToProject}
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
@@ -445,6 +529,24 @@ export function TextBuilderPage({ onBackHome }) {
             setLastSavedRef({ projectId, textId: text.id })
           }
         }}
+      />
+
+      {/* Selection Toolbar */}
+      {selectionToolbar.visible && (
+        <SelectionToolbar
+          position={selectionToolbar.position}
+          selectedText={selectionToolbar.text}
+          onAction={handleToolbarAction}
+        />
+      )}
+
+      {/* Chatbot Panel */}
+      <ChatbotPanel
+        isOpen={isChatbotOpen}
+        onClose={() => setIsChatbotOpen(false)}
+        initialInput={chatbotInput}
+        onInputChange={setChatbotInput}
+        onOpenSettings={onOpenSettings}
       />
     </div>
   )

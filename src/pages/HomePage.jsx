@@ -1,6 +1,7 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { GitCompare, Type, Filter } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { GitCompare, Type, Filter, Settings } from 'lucide-react'
 
 export function HomePage({ onSelectTool }) {
   const tools = [
@@ -16,7 +17,7 @@ export function HomePage({ onSelectTool }) {
     },
     {
       id: 'text-builder',
-      title: 'TextBuilder',
+      title: 'Prompt Designer',
       description: 'Assemble documents from multiple text sources. Select blocks, add prompts, and build your masterclass content.',
       icon: Type,
       iconColor: 'text-blue-500',
@@ -37,7 +38,20 @@ export function HomePage({ onSelectTool }) {
   ]
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 relative">
+      {/* Settings button in top right */}
+      <div className="absolute top-6 right-6">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onSelectTool('settings')}
+          className="text-gray-400 hover:text-white hover:bg-gray-800"
+          title="Settings"
+        >
+          <Settings className="w-5 h-5" />
+        </Button>
+      </div>
+
       <div className="max-w-6xl w-full space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-5xl font-bold text-gray-100">AI Tools</h1>

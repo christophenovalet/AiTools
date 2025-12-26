@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight } from 'lucide-react'
+import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight, Key } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ChatbotMessage } from './ChatbotMessage'
 import { ChatbotInput } from './ChatbotInput'
-import { sendMessage, getModels, getDefaultModel } from '@/lib/claude-api'
+import { sendMessage, getModels, getDefaultModel, hasApiKey } from '@/lib/claude-api'
 
 const MODEL_ORDER = ['haiku', 'sonnet', 'opus']
 const MODEL_COLORS = {
@@ -19,8 +19,18 @@ export function ChatbotPanel({
   isOpen,
   onClose,
   initialInput = '',
-  onInputChange
+  onInputChange,
+  onOpenSettings
 }) {
+  const [apiKeyPresent, setApiKeyPresent] = useState(hasApiKey())
+
+  // Check for API key periodically (in case user returns from settings)
+  useEffect(() => {
+    const checkApiKey = () => setApiKeyPresent(hasApiKey())
+    checkApiKey()
+    const interval = setInterval(checkApiKey, 1000)
+    return () => clearInterval(interval)
+  }, [])
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -409,7 +419,28 @@ export function ChatbotPanel({
             ref={messagesRef}
             className="flex-1 overflow-y-auto p-3 space-y-3"
           >
-            {messages.length === 0 ? (
+            {!apiKeyPresent ? (
+              <div className="flex-1 flex items-center justify-center h-full">
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Key className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-gray-300 font-medium">API Key Required</p>
+                    <p className="text-gray-500 text-sm max-w-xs">
+                      Configure your Claude API key to start chatting with AI
+                    </p>
+                  </div>
+                  <Button
+                    onClick={onOpenSettings}
+                    className="bg-amber-600 hover:bg-amber-500 text-white"
+                  >
+                    <Key className="w-4 h-4 mr-2" />
+                    Configure API Key
+                  </Button>
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="text-center text-gray-500 text-sm py-8">
                 Start a conversation with AI
               </div>

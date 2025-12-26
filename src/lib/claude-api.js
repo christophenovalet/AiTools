@@ -3,8 +3,18 @@ import defaultTags from '@/data/tags.json'
 import defaultAiInstructions from '@/data/ai-instructions.json'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
+const API_KEY_STORAGE_KEY = 'claude-api-key'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
+
+export function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE_KEY) || ''
+}
+
+export function hasApiKey() {
+  const key = getApiKey()
+  return key && key.trim().length > 0
+}
 
 function buildTools() {
   const tools = []
@@ -71,7 +81,8 @@ export function getDefaultModel() {
 }
 
 export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey) {
-  const { apiKey, maxTokens, models, defaultModel } = chatbotConfig
+  const { maxTokens, models, defaultModel } = chatbotConfig
+  const apiKey = getApiKey()
   const selectedModel = models[modelKey || defaultModel]
   const model = selectedModel?.id || models[defaultModel].id
   const tools = buildTools()
