@@ -497,15 +497,6 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
             <div className="grid grid-cols-2 gap-3">
               {filteredTexts.map(text => {
                 const colors = PROJECT_COLORS[text.projectColor] || PROJECT_COLORS.purple
-                const block = {
-                  id: `project-${text.projectId}-${text.id}`,
-                  text: text.content,
-                  columnId: 'project-library',
-                  columnTitle: text.title,
-                  blockNumber: 0,
-                  color: `${colors.bg} ${colors.border}`
-                }
-                const isSelected = selectedBlocks?.some(sb => sb.id === block.id)
 
                 return (
                   <div
@@ -609,15 +600,6 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
               </div>
               {filteredTexts.map(text => {
                 const colors = PROJECT_COLORS[text.projectColor] || PROJECT_COLORS.purple
-                const block = {
-                  id: `project-${text.projectId}-${text.id}`,
-                  text: text.content,
-                  columnId: 'project-library',
-                  columnTitle: text.title,
-                  blockNumber: 0,
-                  color: `${colors.bg} ${colors.border}`
-                }
-                const isSelected = selectedBlocks?.some(sb => sb.id === block.id)
 
                 return (
                   <div

@@ -6,6 +6,22 @@ import aiInstructionsData from '@/data/ai-instructions.json'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 
+// Subsequence matching: checks if all characters in filter appear in target in order
+function isSubsequence(filter, target) {
+  if (!filter) return true
+  let filterIndex = 0
+  const filterLower = filter.toLowerCase()
+  const targetLower = target.toLowerCase()
+
+  for (let i = 0; i < targetLower.length && filterIndex < filterLower.length; i++) {
+    if (targetLower[i] === filterLower[filterIndex]) {
+      filterIndex++
+    }
+  }
+
+  return filterIndex === filterLower.length
+}
+
 export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
   const [filter, setFilter] = useState('')
   const filterRef = useRef(null)
@@ -23,15 +39,15 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
 
   const filteredTags = tags
     .filter(tag =>
-      tag.name.toLowerCase().includes(filter.toLowerCase()) ||
-      (tag.description && tag.description.toLowerCase().includes(filter.toLowerCase()))
+      isSubsequence(filter, tag.name) ||
+      (tag.description && isSubsequence(filter, tag.description))
     )
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const filteredInstructions = aiInstructions
     .filter(inst =>
-      inst.name.toLowerCase().includes(filter.toLowerCase()) ||
-      (inst.description && inst.description.toLowerCase().includes(filter.toLowerCase()))
+      isSubsequence(filter, inst.name) ||
+      (inst.description && isSubsequence(filter, inst.description))
     )
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -40,10 +56,14 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
     filterRef.current?.focus()
   }, [])
 
-  // Handle ESC key
+  // Handle ESC key and Ctrl+Shift+Space to close
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
+        onClose()
+      }
+      if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
+        e.preventDefault()
         onClose()
       }
     }
