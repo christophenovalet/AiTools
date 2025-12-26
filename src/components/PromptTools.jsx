@@ -3,7 +3,7 @@ import { TagsLibrary } from './TagsLibrary'
 import { PromptLibrary } from './PromptLibrary'
 import { Button } from './ui/button'
 
-export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag }) {
+export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag, onInsertInstruction }) {
   const [activeTab, setActiveTab] = useState('tags') // 'tags' | 'prompts'
 
   return (
@@ -18,7 +18,7 @@ export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag }) {
               : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
           }`}
         >
-          🏷️ Tags
+          Tags
           {activeTab === 'tags' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-500" />
           )}
@@ -31,7 +31,7 @@ export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag }) {
               : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
           }`}
         >
-          💡 Prompts
+          Prompts
           {activeTab === 'prompts' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500" />
           )}
@@ -43,6 +43,7 @@ export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag }) {
         {activeTab === 'tags' ? (
           <TagsLibrary
             onInsertTag={onInsertTag}
+            onInsertInstruction={onInsertInstruction}
           />
         ) : (
           <PromptLibrary

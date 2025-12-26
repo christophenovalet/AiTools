@@ -9,10 +9,14 @@ export function PromptLibrary({ selectedBlocks, onToggleBlock }) {
   const [editingId, setEditingId] = useState(null)
   const [newPrompt, setNewPrompt] = useState({ title: '', text: '' })
   const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle | tone
+  const [searchFilter, setSearchFilter] = useState('')
 
-  const filteredPrompts = prompts.filter(p =>
-    activeFilter === 'all' ? true : ((p.category ?? 'template') === activeFilter)
-  )
+  const filteredPrompts = prompts
+    .filter(p => activeFilter === 'all' ? true : ((p.category ?? 'template') === activeFilter))
+    .filter(p =>
+      p.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      p.text.toLowerCase().includes(searchFilter.toLowerCase())
+    )
 
   const handleAddPrompt = () => {
     if (newPrompt.title.trim() && newPrompt.text.trim()) {
@@ -69,6 +73,17 @@ export function PromptLibrary({ selectedBlocks, onToggleBlock }) {
         >
           <Plus className="w-4 h-4" />
         </Button>
+      </div>
+
+      {/* Search filter */}
+      <div className="px-3 pt-2">
+        <input
+          type="text"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Filter prompts..."
+          className="w-full bg-[#0a0a0a] text-gray-100 text-xs border border-gray-700 rounded px-2 py-1.5 outline-none focus:border-purple-500"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">

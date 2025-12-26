@@ -1,10 +1,13 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { SourceColumn } from '@/components/SourceColumn'
 import { OutputColumn } from '@/components/OutputColumn'
 import { PromptTools } from '@/components/PromptTools'
 import { PreviewColumn } from '@/components/PreviewColumn'
+import { TagsOverlay } from '@/components/TagsOverlay'
+import { SaveToProjectModal } from '@/components/SaveToProjectModal'
+import { ProjectsModal } from '@/components/ProjectsModal'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save } from 'lucide-react'
 
 export function TextBuilderPage({ onBackHome }) {
   const [columns, setColumns] = useState([
@@ -22,6 +25,23 @@ export function TextBuilderPage({ onBackHome }) {
   const [previewText, setPreviewText] = useState(null)
   const scrollerRef = useRef(null)
   const [focusedTextareaRef, setFocusedTextareaRef] = useState(null)
+  const [showTagsOverlay, setShowTagsOverlay] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [contentToSave, setContentToSave] = useState('')
+  const [showProjectsModal, setShowProjectsModal] = useState(false)
+  const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId }
+
+  // Keyboard shortcut: Ctrl+Shift+Space to open tags overlay
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
+        e.preventDefault()
+        setShowTagsOverlay(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const updateColumn = (index, updatedColumn) => {
     const newColumns = [...columns]
@@ -161,8 +181,95 @@ export function TextBuilderPage({ onBackHome }) {
     editor.focus()
   }
 
+  const insertInstruction = (name, description) => {
+    if (!focusedTextareaRef?.current) return
+
+    const editor = focusedTextareaRef.current
+    const text = editor.getValue()
+    const selection = editor.getSelection()
+    const start = selection.start
+
+    // Check if we're at the start of a line
+    const beforeText = text.substring(0, start)
+    const lastNewline = beforeText.lastIndexOf('\n')
+    const lineStart = lastNewline === -1 ? 0 : lastNewline + 1
+    const isAtLineStart = beforeText.substring(lineStart).trim() === ''
+
+    // Check if we're at the end of a line
+    const afterText = text.substring(selection.end)
+    const nextNewline = afterText.indexOf('\n')
+    const isAtLineEnd = (nextNewline === -1 ? afterText : afterText.substring(0, nextNewline)).trim() === ''
+
+    // Build the instruction tag with description as content
+    const indentedDescription = description.split('\n').map(line => '\t' + line).join('\n')
+    const newText = `${isAtLineStart ? '' : '\n'}<${name}>\n${indentedDescription}\n</${name}>${isAtLineEnd ? '' : '\n'}`
+
+    editor.replaceSelection(newText)
+    editor.focus()
+  }
+
   const handleEditorFocus = (editorRef) => {
     setFocusedTextareaRef(editorRef)
+  }
+
+  // Get the full workspace state for saving
+  const getWorkspaceState = () => ({
+    columns,
+    selectedBlocks,
+    nextId,
+    previewText
+  })
+
+  // Restore workspace state from a saved text
+  const restoreWorkspaceState = (state) => {
+    if (state.columns) setColumns(state.columns)
+    if (state.selectedBlocks) setSelectedBlocks(state.selectedBlocks)
+    if (state.nextId) setNextId(state.nextId)
+    if (state.previewText !== undefined) setPreviewText(state.previewText)
+  }
+
+  const handleSaveToProject = () => {
+    const workspaceState = getWorkspaceState()
+
+    if (lastSavedRef) {
+      // Overwrite existing save silently
+      const stored = localStorage.getItem('textbuilder-projects')
+      if (stored) {
+        const projects = JSON.parse(stored)
+        const updatedProjects = projects.map(p =>
+          p.id === lastSavedRef.projectId
+            ? {
+                ...p,
+                texts: p.texts.map(t =>
+                  t.id === lastSavedRef.textId
+                    ? { ...t, state: workspaceState, updatedAt: Date.now() }
+                    : t
+                ),
+                updatedAt: Date.now()
+              }
+            : p
+        )
+        localStorage.setItem('textbuilder-projects', JSON.stringify(updatedProjects))
+      }
+    } else {
+      // First save - open modal
+      setContentToSave(JSON.stringify(workspaceState))
+      setShowSaveModal(true)
+    }
+  }
+
+  const clearAll = () => {
+    setColumns([{
+      id: 1,
+      title: 'Source 1',
+      text: '',
+      color: 'bg-blue-500/20 border-blue-500'
+    }])
+    setSelectedBlocks([])
+    setNextId(2)
+    setMaximizedSourceId(null)
+    setPreviewText(null)
+    setLastSavedRef(null) // Reset save reference
   }
 
   return (
@@ -178,10 +285,33 @@ export function TextBuilderPage({ onBackHome }) {
               <Home className="mr-2 h-4 w-4" />
               Home
             </Button>
+            <Button
+              onClick={() => setShowProjectsModal(true)}
+              variant="ghost"
+              className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              Projects
+            </Button>
             <h1 className="text-3xl font-bold text-gray-100">TextBuilder</h1>
           </div>
 
           <div className="flex gap-3 items-center">
+            <Button
+              onClick={handleSaveToProject}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Save
+            </Button>
+            <Button
+              onClick={clearAll}
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear
+            </Button>
             {columns.length < 5 && (
               <Button
                 onClick={addColumn}
@@ -201,6 +331,7 @@ export function TextBuilderPage({ onBackHome }) {
               selectedBlocks={selectedBlocks}
               onToggleBlock={toggleBlock}
               onInsertTag={insertTag}
+              onInsertInstruction={insertInstruction}
             />
           </div>
 
@@ -281,9 +412,40 @@ export function TextBuilderPage({ onBackHome }) {
         </div>
 
         <div className="text-center text-sm text-gray-500 flex-shrink-0">
-          <p>Paste text in columns • Use double line breaks to create blocks • Select blocks to assemble your document • Add a prompt from the library</p>
+          <p>Paste text in columns • Use double line breaks to create blocks • Select blocks to assemble your document • <kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400 text-xs">Ctrl+Shift+Space</kbd> for quick tags</p>
         </div>
       </div>
+
+      {/* Tags Overlay */}
+      {showTagsOverlay && (
+        <TagsOverlay
+          onClose={() => setShowTagsOverlay(false)}
+          onInsertTag={insertTag}
+          onInsertInstruction={insertInstruction}
+        />
+      )}
+
+      {/* Save to Project Modal */}
+      <SaveToProjectModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        workspaceState={getWorkspaceState()}
+        onSave={(projectId, text) => {
+          setLastSavedRef({ projectId, textId: text.id })
+        }}
+      />
+
+      {/* Projects Modal */}
+      <ProjectsModal
+        isOpen={showProjectsModal}
+        onClose={() => setShowProjectsModal(false)}
+        onLoadWorkspace={(projectId, text) => {
+          if (text.state) {
+            restoreWorkspaceState(text.state)
+            setLastSavedRef({ projectId, textId: text.id })
+          }
+        }}
+      />
     </div>
   )
 }

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "My Workspaces",
+    "color": "purple",
+    "createdAt": 1703500000000,
+    "updatedAt": 1703500000000,
+    "texts": []
+  },
+  {
+    "id": 2,
+    "name": "Templates",
+    "color": "cyan",
+    "createdAt": 1703500000000,
+    "updatedAt": 1703500000000,
+    "texts": []
+  },
+  {
+    "id": 3,
+    "name": "Archive",
+    "color": "green",
+    "createdAt": 1703500000000,
+    "updatedAt": 1703500000000,
+    "texts": []
+  }
+]
