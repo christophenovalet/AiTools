@@ -32,5 +32,6 @@
   {"id":1766738049617,"name":"UseCase id='1'","description":"Use case"},
   {"id":1766739966871,"name":"Ask","description":"The agent should ask questions about this topic before continuing"},
   {"id":1766740094343,"name":"Dependency","description":"This should be implemented before going into this section"},
-  {"id":1766741950388,"name":"Pain_Points","description":"Painfull actions that needs to be improved"}
+  {"id":1766741950388,"name":"Pain_Points","description":"Painfull actions that needs to be improved"},
+  {"id":1766742000000,"name":"web_search","description":"Indicates the AI should search the web for current information","category":"instruction"}
 ]

@@ -1,0 +1,51 @@
+{
+  "apiKey": "",
+  "defaultModel": "sonnet",
+  "maxTokens": 4096,
+  "models": {
+    "haiku": {
+      "id": "claude-haiku-4-5",
+      "name": "Haiku 4.5",
+      "description": "Fastest",
+      "color": "emerald"
+    },
+    "sonnet": {
+      "id": "claude-sonnet-4-5",
+      "name": "Sonnet 4.5",
+      "description": "Balanced",
+      "color": "cyan"
+    },
+    "opus": {
+      "id": "claude-opus-4-5",
+      "name": "Opus 4.5",
+      "description": "Smartest",
+      "color": "violet"
+    }
+  },
+  "webSearch": {
+    "enabled": true,
+    "maxUses": 5
+  },
+  "menuItems": [
+    {
+      "id": "ask-ai",
+      "label": "Ask AI",
+      "template": "{selected_text}"
+    },
+    {
+      "id": "ascii-mockup",
+      "label": "Ascii mockup",
+      "template": "You are a top UX designer at openAI, you create minimalist designs, you will create a ascii mockup out of the following description, answer in markdown, put the design into a code block so i can copy it\n{selected_text}"
+    },
+    {
+      "id": "rewrite-for-ai",
+      "label": "Rewrite for AI",
+      "template": "please rewrite the selected text for an ai agent\n{selected_text}"
+    },
+    {
+      "id": "xml-prompt",
+      "label": "XML Prompt",
+      "template": "You are a prompt engineer, you write xml structured prompts. Transform the following prompt into a well structured XML prompt.\n\nThe prompt must be clear, concise and easy to understand for an AI agent. You will use tags and instructions from the reference below.\n\nPut the AI_Agent_Glossary instruction at the end of the prompt to explain tags that need clarification.\n\n<tags_and_instructions_reference>\n{tags_json}\n</tags_and_instructions_reference>\n\n<input>\n{selected_text}\n</input>"
+    }
+  ]
+}

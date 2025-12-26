@@ -1,0 +1,483 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ChatbotMessage } from './ChatbotMessage'
+import { ChatbotInput } from './ChatbotInput'
+import { sendMessage, getModels, getDefaultModel } from '@/lib/claude-api'
+
+const MODEL_ORDER = ['haiku', 'sonnet', 'opus']
+const MODEL_COLORS = {
+  haiku: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+  sonnet: 'bg-cyan-600 hover:bg-cyan-500 text-white',
+  opus: 'bg-violet-600 hover:bg-violet-500 text-white'
+}
+
+const MIN_WIDTH = 400
+const MIN_HEIGHT = 400
+
+export function ChatbotPanel({
+  isOpen,
+  onClose,
+  initialInput = '',
+  onInputChange
+}) {
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [editingMessageId, setEditingMessageId] = useState(null)
+  const [attachments, setAttachments] = useState([])
+  const [currentModel, setCurrentModel] = useState(() => {
+    const stored = localStorage.getItem('chatbot-model')
+    return stored && MODEL_ORDER.includes(stored) ? stored : getDefaultModel()
+  })
+
+  const models = getModels()
+
+  // Persist model selection
+  useEffect(() => {
+    localStorage.setItem('chatbot-model', currentModel)
+  }, [currentModel])
+
+  const cycleModel = useCallback(() => {
+    setCurrentModel(prev => {
+      const currentIdx = MODEL_ORDER.indexOf(prev)
+      const nextIdx = (currentIdx + 1) % MODEL_ORDER.length
+      return MODEL_ORDER[nextIdx]
+    })
+  }, [])
+
+  const [position, setPosition] = useState({ x: null, y: null })
+  const [size, setSize] = useState(() => ({
+    width: Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.5)),
+    height: Math.floor(window.innerHeight - 40)
+  }))
+
+  const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [resizeStart, setResizeStart] = useState(null)
+
+  const panelRef = useRef(null)
+  const messagesRef = useRef(null)
+
+  // Set initial input when opened with prefilled text
+  useEffect(() => {
+    if (initialInput && isOpen) {
+      setInput(initialInput)
+      onInputChange?.('')
+    }
+  }, [initialInput, isOpen, onInputChange])
+
+  // Initialize position on first open - always right side, full height
+  useEffect(() => {
+    if (isOpen && position.x === null) {
+      const width = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.5))
+      const height = window.innerHeight - 40
+      setSize({ width, height })
+      setPosition({
+        x: window.innerWidth - width,
+        y: 20
+      })
+    }
+  }, [isOpen, position.x])
+
+  // Load messages from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('chatbot-messages')
+    if (stored) {
+      try {
+        setMessages(JSON.parse(stored))
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [])
+
+  // Save messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('chatbot-messages', JSON.stringify(messages))
+    }
+  }, [messages])
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    }
+  }, [messages])
+
+  // Handle drag
+  const handleMouseDown = (e) => {
+    if (e.target.closest('.chatbot-drag-handle')) {
+      setIsDragging(true)
+      setDragOffset({
+        x: e.clientX - position.x,
+        y: e.clientY - position.y
+      })
+      e.preventDefault()
+    }
+  }
+
+  // Handle resize
+  const handleResizeMouseDown = (e, corner) => {
+    e.stopPropagation()
+    setIsResizing(corner)
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height,
+      posX: position.x,
+      posY: position.y
+    })
+    e.preventDefault()
+  }
+
+  // Global mouse move/up handlers
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isDragging) {
+        const newX = Math.max(0, Math.min(window.innerWidth - size.width, e.clientX - dragOffset.x))
+        const newY = Math.max(0, Math.min(window.innerHeight - size.height, e.clientY - dragOffset.y))
+        setPosition({ x: newX, y: newY })
+      }
+
+      if (isResizing && resizeStart) {
+        const dx = e.clientX - resizeStart.x
+        const dy = e.clientY - resizeStart.y
+        const maxHeight = Math.floor(window.innerHeight * 0.9)
+
+        let newWidth = resizeStart.width
+        let newHeight = resizeStart.height
+        let newX = resizeStart.posX
+        let newY = resizeStart.posY
+
+        if (isResizing.includes('e')) {
+          newWidth = Math.max(MIN_WIDTH, resizeStart.width + dx)
+        }
+        if (isResizing.includes('w')) {
+          newWidth = Math.max(MIN_WIDTH, resizeStart.width - dx)
+          newX = resizeStart.posX + (resizeStart.width - newWidth)
+        }
+        if (isResizing.includes('s')) {
+          newHeight = Math.min(maxHeight, Math.max(MIN_HEIGHT, resizeStart.height + dy))
+        }
+        if (isResizing.includes('n')) {
+          newHeight = Math.min(maxHeight, Math.max(MIN_HEIGHT, resizeStart.height - dy))
+          newY = resizeStart.posY + (resizeStart.height - newHeight)
+        }
+
+        setSize({ width: newWidth, height: newHeight })
+        setPosition({ x: newX, y: newY })
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+      setIsResizing(null)
+      setResizeStart(null)
+    }
+
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging, isResizing, dragOffset, resizeStart, size.width, size.height])
+
+  const handleAddAttachment = useCallback((attachment) => {
+    setAttachments(prev => [...prev, attachment])
+  }, [])
+
+  const handleRemoveAttachment = useCallback((id) => {
+    setAttachments(prev => prev.filter(a => a.id !== id))
+  }, [])
+
+  const handleSend = useCallback(async () => {
+    if ((!input.trim() && attachments.length === 0) || isStreaming) return
+
+    const userMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim(),
+      attachments: attachments.length > 0 ? [...attachments] : undefined,
+      timestamp: Date.now()
+    }
+
+    const assistantMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now()
+    }
+
+    let conversationMessages
+    if (editingMessageId) {
+      // Find the index of the message being edited
+      const editIdx = messages.findIndex(m => m.id === editingMessageId)
+      // Keep messages before the edited one, add new user message
+      const previousMessages = messages.slice(0, editIdx)
+      conversationMessages = [...previousMessages, userMessage]
+      setMessages([...previousMessages, userMessage, assistantMessage])
+      setEditingMessageId(null)
+    } else {
+      conversationMessages = [...messages, userMessage]
+      setMessages(prev => [...prev, userMessage, assistantMessage])
+    }
+
+    setInput('')
+    setAttachments([])
+    setIsStreaming(true)
+
+    await sendMessage(
+      conversationMessages,
+      (chunk) => {
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastIdx = newMessages.length - 1
+          newMessages[lastIdx] = {
+            ...newMessages[lastIdx],
+            content: newMessages[lastIdx].content + chunk
+          }
+          return newMessages
+        })
+      },
+      (searchResults) => {
+        // Update final message with search results if any
+        if (searchResults && searchResults.length > 0) {
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastIdx = newMessages.length - 1
+            newMessages[lastIdx] = {
+              ...newMessages[lastIdx],
+              searchResults
+            }
+            return newMessages
+          })
+        }
+        setIsStreaming(false)
+        setIsSearching(false)
+      },
+      (error) => {
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastIdx = newMessages.length - 1
+          newMessages[lastIdx] = {
+            ...newMessages[lastIdx],
+            content: `Error: ${error.message}`,
+            isError: true
+          }
+          return newMessages
+        })
+        setIsStreaming(false)
+        setIsSearching(false)
+      },
+      () => {
+        // onSearchStart
+        setIsSearching(true)
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastIdx = newMessages.length - 1
+          newMessages[lastIdx] = {
+            ...newMessages[lastIdx],
+            isSearching: true
+          }
+          return newMessages
+        })
+      },
+      (searchResults) => {
+        // onSearchResult - update message with results
+        setIsSearching(false)
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastIdx = newMessages.length - 1
+          newMessages[lastIdx] = {
+            ...newMessages[lastIdx],
+            isSearching: false,
+            searchResults
+          }
+          return newMessages
+        })
+      },
+      currentModel
+    )
+  }, [input, isStreaming, messages, editingMessageId, attachments, currentModel])
+
+  const clearMessages = () => {
+    setMessages([])
+    setEditingMessageId(null)
+    localStorage.removeItem('chatbot-messages')
+  }
+
+  const handleEditMessage = useCallback((message) => {
+    setInput(message.content)
+    setEditingMessageId(message.id)
+  }, [])
+
+  const handleDeleteMessage = useCallback((message) => {
+    const msgIndex = messages.findIndex(m => m.id === message.id)
+    if (msgIndex === -1) return
+
+    // If deleting a user message, also delete the following assistant response
+    if (message.role === 'user' && messages[msgIndex + 1]?.role === 'assistant') {
+      setMessages(prev => prev.filter((_, i) => i !== msgIndex && i !== msgIndex + 1))
+    }
+    // If deleting an assistant message, also delete the preceding user message
+    else if (message.role === 'assistant' && messages[msgIndex - 1]?.role === 'user') {
+      setMessages(prev => prev.filter((_, i) => i !== msgIndex && i !== msgIndex - 1))
+    }
+    else {
+      setMessages(prev => prev.filter(m => m.id !== message.id))
+    }
+  }, [messages])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      ref={panelRef}
+      className="fixed z-50 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+      style={{
+        left: position.x ?? 'auto',
+        top: position.y ?? 'auto',
+        right: position.x === null ? 20 : 'auto',
+        bottom: position.y === null ? 20 : 'auto',
+        width: size.width,
+        height: isMinimized ? 48 : size.height
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      {/* Header */}
+      <div className="chatbot-drag-handle flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-gray-800/50 cursor-move select-none">
+        <div className="flex items-center gap-2">
+          <GripHorizontal className="w-4 h-4 text-gray-500" />
+          <span className="text-gray-100 font-semibold text-sm">AI Assistant</span>
+          <span className="text-gray-600 text-sm">·</span>
+          {/* Model Selector */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              cycleModel()
+            }}
+            disabled={isStreaming}
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium transition-all ${MODEL_COLORS[currentModel]} ${isStreaming ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={`${models[currentModel]?.name}: ${models[currentModel]?.description} (click to switch)`}
+          >
+            <span>{models[currentModel]?.name}</span>
+            <ChevronRight className="w-3 h-3 opacity-60" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-gray-400 hover:text-red-400"
+            onClick={clearMessages}
+            title="Clear conversation"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-gray-400 hover:text-white"
+            onClick={() => setIsMinimized(!isMinimized)}
+          >
+            {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-gray-400 hover:text-white"
+            onClick={onClose}
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {!isMinimized && (
+        <>
+          {/* Messages */}
+          <div
+            ref={messagesRef}
+            className="flex-1 overflow-y-auto p-3 space-y-3"
+          >
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-500 text-sm py-8">
+                Start a conversation with AI
+              </div>
+            ) : (
+              messages.map((msg, idx) => (
+                <ChatbotMessage
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isStreaming && idx === messages.length - 1 && msg.role === 'assistant'}
+                  onEdit={handleEditMessage}
+                  onDelete={handleDeleteMessage}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Input */}
+          <ChatbotInput
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            isStreaming={isStreaming}
+            isEditing={!!editingMessageId}
+            onCancelEdit={() => {
+              setEditingMessageId(null)
+              setInput('')
+              setAttachments([])
+            }}
+            attachments={attachments}
+            onAddAttachment={handleAddAttachment}
+            onRemoveAttachment={handleRemoveAttachment}
+          />
+        </>
+      )}
+
+      {/* Resize handles */}
+      {!isMinimized && (
+        <>
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
+          />
+          <div
+            className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
+          />
+          <div
+            className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
+          />
+          <div
+            className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
+          />
+          <div
+            className="absolute right-0 top-4 bottom-4 w-2 cursor-e-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
+          />
+          <div
+            className="absolute left-0 top-4 bottom-4 w-2 cursor-w-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
+          />
+          <div
+            className="absolute bottom-0 left-4 right-4 h-2 cursor-s-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 's')}
+          />
+        </>
+      )}
+    </div>
+  )
+}
