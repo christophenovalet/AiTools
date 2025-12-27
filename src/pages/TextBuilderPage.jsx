@@ -9,7 +9,7 @@ import { ProjectsModal } from '@/components/ProjectsModal'
 import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
 import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings } from 'lucide-react'
 
 export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [columns, setColumns] = useState([
@@ -366,6 +366,14 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
             >
               <FolderOpen className="mr-2 h-4 w-4" />
               Projects
+            </Button>
+            <Button
+              onClick={onOpenSettings}
+              variant="ghost"
+              className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
             </Button>
             <h1 className="text-3xl font-bold text-gray-100">Prompt Designer</h1>
           </div>

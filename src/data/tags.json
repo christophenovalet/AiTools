@@ -5,7 +5,6 @@
   {"id":4,"name":"example","description":"Example for the model to follow or emulate","category":"input"},
   {"id":5,"name":"input","description":"Raw data or content to process","category":"input"},
   {"id":6,"name":"document","description":"Reference material, docs, sources","category":"input"},
-  {"id":7,"name":"history","description":"Conversation history or previous interactions","category":"input"},
   {"id":8,"name":"question","description":"The user's question or query","category":"input"},
   {"id":9,"name":"task","description":"What the model should do","category":"instruction"},
   {"id":10,"name":"goal","description":"The objective or end result desired","category":"instruction"},
@@ -17,10 +16,8 @@
   {"id":16,"name":"format","description":"How the response should be structured","category":"output"},
   {"id":17,"name":"response","description":"Container for the model's answer","category":"output"},
   {"id":18,"name":"checklist","description":"Verification list before/after task","category":"output"},
-  {"id":19,"name":"thinking","description":"Scratchpad for reasoning (hidden from final output)","category":"thinking"},
   {"id":20,"name":"analysis","description":"Breakdown or examination section","category":"thinking"},
   {"id":21,"name":"steps","description":"Sequential process to follow","category":"thinking"},
-  {"id":22,"name":"audit","description":"Validation/verification step","category":"thinking"},
   {"id":23,"name":"role","description":"Who the model should act as","category":"role"},
   {"id":24,"name":"persona","description":"Character traits, expertise, background","category":"role"},
   {"id":25,"name":"tone","description":"Voice, mood, communication style","category":"role"},
@@ -33,5 +30,13 @@
   {"id":1766739966871,"name":"Ask","description":"The agent should ask questions about this topic before continuing"},
   {"id":1766740094343,"name":"Dependency","description":"This should be implemented before going into this section"},
   {"id":1766741950388,"name":"Pain_Points","description":"Painfull actions that needs to be improved"},
-  {"id":1766742000000,"name":"web_search","description":"Indicates the AI should search the web for current information","category":"instruction"}
+  {"id":1766742000000,"name":"web_search","description":"Indicates the AI should search the web for current information","category":"instruction"},
+  {"id":1766742000001,"name":"Backward_Compatibility","description":"Maintain backward compatibility with existing APIs, interfaces, and behaviors","category":"instruction"},
+  {"id":1766742000002,"name":"No_Backward_Compatibility","description":"Breaking changes are allowed; no need to maintain compatibility with previous versions","category":"instruction"},
+  {"id":1766742000003,"name":"Fallback","description":"Implement fallback mechanisms for error handling and graceful degradation","category":"instruction"},
+  {"id":1766742000004,"name":"No_Fallback","description":"No fallback needed; fail fast and let errors propagate","category":"instruction"},
+  {"id":1766742000005,"name":"Precondition","description":"Requirements that must be met before execution","category":"input"},
+  {"id":1766742000006,"name":"backend","description":"Server-side logic, APIs, database operations","category":"specialized"},
+  {"id":1766742000007,"name":"frontend","description":"Client-side UI, components, user interactions","category":"specialized"},
+  {"id":1766742000008,"name":"data","description":"Data structures, models, schemas, or datasets","category":"specialized"}
 ]

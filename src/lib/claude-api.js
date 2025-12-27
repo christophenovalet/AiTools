@@ -6,6 +6,7 @@ const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_KEY_STORAGE_KEY = 'claude-api-key'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
+const MENU_ITEMS_STORAGE_KEY = 'textbuilder-menu-items'
 
 export function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE_KEY) || ''
@@ -204,7 +205,23 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
 }
 
 export function getMenuItems() {
+  try {
+    const stored = localStorage.getItem(MENU_ITEMS_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    // Use defaults on error
+  }
   return chatbotConfig.menuItems
+}
+
+export function getDefaultMenuItems() {
+  return chatbotConfig.menuItems
+}
+
+export function saveMenuItems(menuItems) {
+  localStorage.setItem(MENU_ITEMS_STORAGE_KEY, JSON.stringify(menuItems))
 }
 
 function getTagsAndInstructions() {
