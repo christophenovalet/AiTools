@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getMenuItems, getDefaultMenuItems, saveMenuItems } from '@/lib/claude-api'
+import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing } from '@/lib/claude-api'
+import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
 
 const API_KEY_STORAGE_KEY = 'claude-api-key'
+
+const MODEL_LABELS = {
+  haiku: 'Haiku 4.5',
+  sonnet: 'Sonnet 4.5',
+  opus: 'Opus 4.5'
+}
 
 export function SettingsPage({ onBackHome }) {
   const [apiKey, setApiKey] = useState('')
@@ -12,6 +19,12 @@ export function SettingsPage({ onBackHome }) {
   const [saved, setSaved] = useState(false)
   const [menuItems, setMenuItems] = useState([])
   const [menuItemsSaved, setMenuItemsSaved] = useState(false)
+  const [modelPricing, setModelPricing] = useState({})
+  const [pricingSaved, setPricingSaved] = useState(false)
+  const [shortcuts, setShortcuts] = useState({})
+  const [shortcutsSaved, setShortcutsSaved] = useState(false)
+  const [recordingShortcut, setRecordingShortcut] = useState(null)
+  const [shortcutConflict, setShortcutConflict] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem(API_KEY_STORAGE_KEY)
@@ -19,6 +32,8 @@ export function SettingsPage({ onBackHome }) {
       setApiKey(stored)
     }
     setMenuItems(getMenuItems())
+    setModelPricing(getModelPricing())
+    setShortcuts(getShortcuts())
   }, [])
 
   const handleSave = () => {
@@ -59,6 +74,99 @@ export function SettingsPage({ onBackHome }) {
   const deleteMenuItem = (index) => {
     setMenuItems(menuItems.filter((_, i) => i !== index))
   }
+
+  const handleSavePricing = () => {
+    saveModelPricing(modelPricing)
+    setPricingSaved(true)
+    setTimeout(() => setPricingSaved(false), 2000)
+  }
+
+  const handleResetPricing = () => {
+    const defaults = getDefaultModelPricing()
+    setModelPricing(defaults)
+    saveModelPricing(defaults)
+  }
+
+  const updatePricing = (model, type, value) => {
+    const numValue = parseFloat(value) || 0
+    setModelPricing(prev => ({
+      ...prev,
+      [model]: {
+        ...prev[model],
+        [type]: numValue
+      }
+    }))
+  }
+
+  const handleSaveShortcuts = () => {
+    saveShortcuts(shortcuts)
+    setShortcutsSaved(true)
+    setTimeout(() => setShortcutsSaved(false), 2000)
+  }
+
+  const handleResetShortcuts = () => {
+    const defaults = resetShortcuts()
+    setShortcuts(defaults)
+    setShortcutConflict(null)
+  }
+
+  const startRecording = (shortcutId) => {
+    setRecordingShortcut(shortcutId)
+    setShortcutConflict(null)
+  }
+
+  const cancelRecording = () => {
+    setRecordingShortcut(null)
+    setShortcutConflict(null)
+  }
+
+  const handleShortcutKeyDown = useCallback((e) => {
+    if (!recordingShortcut) return
+
+    // Ignore modifier-only keypresses
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const newShortcut = parseKeyboardEvent(e)
+
+    // Validate the shortcut
+    if (!isValidShortcut(newShortcut)) {
+      setShortcutConflict({ type: 'invalid', message: 'Shortcut must include Ctrl, Alt, or Shift modifier' })
+      return
+    }
+
+    // Check for conflicts
+    const conflicts = findConflicts(shortcuts, newShortcut, recordingShortcut)
+    if (conflicts.length > 0) {
+      setShortcutConflict({
+        type: 'conflict',
+        message: `This shortcut is already used by "${conflicts[0].label}"`
+      })
+      return
+    }
+
+    // Update the shortcut
+    const currentShortcut = shortcuts[recordingShortcut]
+    setShortcuts(prev => ({
+      ...prev,
+      [recordingShortcut]: {
+        ...currentShortcut,
+        ...newShortcut
+      }
+    }))
+    setRecordingShortcut(null)
+    setShortcutConflict(null)
+  }, [recordingShortcut, shortcuts])
+
+  // Listen for keyboard events when recording
+  useEffect(() => {
+    if (recordingShortcut) {
+      window.addEventListener('keydown', handleShortcutKeyDown)
+      return () => window.removeEventListener('keydown', handleShortcutKeyDown)
+    }
+  }, [recordingShortcut, handleShortcutKeyDown])
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-6">
@@ -230,6 +338,185 @@ export function SettingsPage({ onBackHome }) {
                 )}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Model Pricing Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl text-gray-100">Model Pricing</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Set pricing per million tokens for cost tracking
+                </CardDescription>
+              </div>
+              <Button
+                onClick={handleResetPricing}
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-gray-300"
+                title="Reset to defaults"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {['haiku', 'sonnet', 'opus'].map((model) => (
+              <div key={model} className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
+                <div className="text-sm font-medium text-gray-200 mb-3">{MODEL_LABELS[model]}</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Input ($/M tokens)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={modelPricing[model]?.input ?? 0}
+                      onChange={(e) => updatePricing(model, 'input', e.target.value)}
+                      className="w-full bg-[#1a1a1a] border border-[#333333] rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Output ($/M tokens)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={modelPricing[model]?.output ?? 0}
+                      onChange={(e) => updatePricing(model, 'output', e.target.value)}
+                      className="w-full bg-[#1a1a1a] border border-[#333333] rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSavePricing}
+                className={`${pricingSaved ? 'bg-green-600 hover:bg-green-600' : 'bg-emerald-600 hover:bg-emerald-500'} text-white`}
+              >
+                {pricingSaved ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Pricing
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Check current pricing at{' '}
+              <a
+                href="https://www.anthropic.com/pricing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-500 hover:text-emerald-400 underline"
+              >
+                anthropic.com/pricing
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Keyboard Shortcuts Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Keyboard className="w-5 h-5 text-violet-500" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl text-gray-100">Keyboard Shortcuts</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Customize keyboard shortcuts to avoid conflicts
+                </CardDescription>
+              </div>
+              <Button
+                onClick={handleResetShortcuts}
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-gray-300"
+                title="Reset to defaults"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Object.entries(shortcuts).map(([id, shortcut]) => (
+              <div key={id} className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-gray-200">{shortcut.label}</div>
+                    <div className="text-xs text-gray-500">{shortcut.description}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {recordingShortcut === id ? (
+                      <>
+                        <div className="px-3 py-1.5 bg-violet-500/20 border border-violet-500 rounded text-violet-300 text-sm animate-pulse">
+                          Press keys...
+                        </div>
+                        <Button
+                          onClick={cancelRecording}
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-400 hover:text-gray-300"
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => startRecording(id)}
+                        className="px-3 py-1.5 bg-[#1a1a1a] border border-[#333333] rounded text-gray-200 text-sm font-mono hover:border-violet-500/50 hover:bg-violet-500/10 transition-colors"
+                      >
+                        {formatShortcut(shortcut)}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {recordingShortcut === id && shortcutConflict && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-amber-400">
+                    <AlertTriangle className="w-3 h-3" />
+                    {shortcutConflict.message}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSaveShortcuts}
+                className={`${shortcutsSaved ? 'bg-green-600 hover:bg-green-600' : 'bg-violet-600 hover:bg-violet-500'} text-white`}
+              >
+                {shortcutsSaved ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Shortcuts
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Click on a shortcut to record a new key combination. Shortcuts require at least one modifier key (Ctrl, Alt, or Shift).
+            </p>
           </CardContent>
         </Card>
       </div>

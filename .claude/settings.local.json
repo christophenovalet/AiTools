@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx netlify deploy:*)",
+      "Bash(netlify deploy:*)",
+      "Bash(npm install:*)",
+      "Bash(netlify sites:list:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

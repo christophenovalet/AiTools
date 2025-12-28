@@ -7,6 +7,14 @@ const API_KEY_STORAGE_KEY = 'claude-api-key'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 const MENU_ITEMS_STORAGE_KEY = 'textbuilder-menu-items'
+const MODEL_PRICING_STORAGE_KEY = 'chatbot-model-pricing'
+
+// Default model pricing per million tokens (USD) - Claude 4.5, December 2025
+const DEFAULT_MODEL_PRICING = {
+  haiku: { input: 1.00, output: 5.00 },
+  sonnet: { input: 3.00, output: 15.00 },
+  opus: { input: 5.00, output: 25.00 }
+}
 
 export function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE_KEY) || ''
@@ -81,7 +89,7 @@ export function getDefaultModel() {
   return chatbotConfig.defaultModel
 }
 
-export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey, context = '') {
+export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey, context = '', onUsage = null) {
   const { maxTokens, models, defaultModel } = chatbotConfig
   const apiKey = getApiKey()
   const selectedModel = models[modelKey || defaultModel]
@@ -136,6 +144,7 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
     let buffer = ''
     let currentContentBlock = null
     let searchResults = []
+    let usage = { input_tokens: 0, output_tokens: 0 }
 
     while (true) {
       const { done, value } = await reader.read()
@@ -198,7 +207,18 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
               onSearchResult?.(searchResults)
             }
 
+            // Capture usage from message_delta (contains output_tokens count)
+            if (parsed.type === 'message_delta' && parsed.usage) {
+              usage.output_tokens = parsed.usage.output_tokens || 0
+            }
+
+            // Capture input tokens from message_start
+            if (parsed.type === 'message_start' && parsed.message?.usage) {
+              usage.input_tokens = parsed.message.usage.input_tokens || 0
+            }
+
             if (parsed.type === 'message_stop') {
+              onUsage?.(usage)
               onComplete(searchResults)
               return
             }
@@ -233,6 +253,26 @@ export function getDefaultMenuItems() {
 
 export function saveMenuItems(menuItems) {
   localStorage.setItem(MENU_ITEMS_STORAGE_KEY, JSON.stringify(menuItems))
+}
+
+export function getModelPricing() {
+  try {
+    const stored = localStorage.getItem(MODEL_PRICING_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    // Use defaults on error
+  }
+  return DEFAULT_MODEL_PRICING
+}
+
+export function getDefaultModelPricing() {
+  return DEFAULT_MODEL_PRICING
+}
+
+export function saveModelPricing(pricing) {
+  localStorage.setItem(MODEL_PRICING_STORAGE_KEY, JSON.stringify(pricing))
 }
 
 function getTagsAndInstructions() {

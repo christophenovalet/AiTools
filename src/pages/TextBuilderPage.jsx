@@ -10,6 +10,7 @@ import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
 import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
 import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings } from 'lucide-react'
+import { getShortcut, matchesShortcut, formatShortcut } from '@/lib/keyboard-shortcuts'
 
 export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [columns, setColumns] = useState([
@@ -36,6 +37,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
   const [chatbotInput, setChatbotInput] = useState('')
+  const [clearChatOnOpen, setClearChatOnOpen] = useState(false)
   const [selectionToolbar, setSelectionToolbar] = useState({
     visible: false,
     position: null,
@@ -73,10 +75,11 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     handleCloseBranch(branchId)
   }, [handleCloseBranch])
 
-  // Keyboard shortcut: Ctrl+Shift+Space to toggle tags overlay
+  // Keyboard shortcut: Toggle tags overlay (customizable)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
+      const quickTagsShortcut = getShortcut('quickTags')
+      if (matchesShortcut(e, quickTagsShortcut)) {
         e.preventDefault()
         setShowTagsOverlay(prev => !prev)
       }
@@ -137,9 +140,10 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectionToolbar.visible])
 
-  // Handle toolbar action
+  // Handle toolbar action - clears conversation and opens with new prompt
   const handleToolbarAction = useCallback((formattedPrompt) => {
     setChatbotInput(formattedPrompt)
+    setClearChatOnOpen(true)
     setIsChatbotOpen(true)
     setSelectionToolbar({ visible: false, position: null, text: '' })
   }, [])
@@ -535,7 +539,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         </div>
 
         <div className="text-center text-sm text-gray-500 flex-shrink-0">
-          <p>Paste text in columns • Use double line breaks to create blocks • Select blocks to assemble your document • <kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400 text-xs">Ctrl+Shift+Space</kbd> for quick tags</p>
+          <p>Paste text in columns • Use double line breaks to create blocks • Select blocks to assemble your document • <kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400 text-xs">{formatShortcut(getShortcut('quickTags'))}</kbd> for quick tags</p>
         </div>
       </div>
 
@@ -587,6 +591,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         onInputChange={setChatbotInput}
         onOpenSettings={onOpenSettings}
         onBranch={handleCreateBranch}
+        clearOnOpen={clearChatOnOpen}
+        onClearOnOpenHandled={() => setClearChatOnOpen(false)}
       />
 
       {/* Branch Panels */}

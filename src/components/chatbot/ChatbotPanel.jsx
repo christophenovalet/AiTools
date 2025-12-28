@@ -3,13 +3,22 @@ import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight, Key, GitBran
 import { Button } from '@/components/ui/button'
 import { ChatbotMessage } from './ChatbotMessage'
 import { ChatbotInput } from './ChatbotInput'
-import { sendMessage, getModels, getDefaultModel, hasApiKey } from '@/lib/claude-api'
+import { sendMessage, getModels, getDefaultModel, hasApiKey, getModelPricing } from '@/lib/claude-api'
+import { getShortcut, matchesShortcut, formatShortcut } from '@/lib/keyboard-shortcuts'
 
 const MODEL_ORDER = ['haiku', 'sonnet', 'opus']
 const MODEL_COLORS = {
   haiku: 'bg-emerald-600 hover:bg-emerald-500 text-white',
   sonnet: 'bg-cyan-600 hover:bg-cyan-500 text-white',
   opus: 'bg-violet-600 hover:bg-violet-500 text-white'
+}
+
+function calculateCost(inputTokens, outputTokens, model) {
+  const pricing = getModelPricing()
+  const modelPricing = pricing[model] || pricing.sonnet
+  const inputCost = (inputTokens / 1_000_000) * modelPricing.input
+  const outputCost = (outputTokens / 1_000_000) * modelPricing.output
+  return inputCost + outputCost
 }
 
 const MIN_WIDTH = 400
@@ -27,7 +36,10 @@ export function ChatbotPanel({
   branchIndex = 0,
   initialMessages = null,
   onCopyToMain,
-  onBranch
+  onBranch,
+  // Clear conversation on open (for AI tools)
+  clearOnOpen = false,
+  onClearOnOpenHandled
 }) {
   const [apiKeyPresent, setApiKeyPresent] = useState(hasApiKey())
 
@@ -54,6 +66,7 @@ export function ChatbotPanel({
   const [context, setContext] = useState(() => {
     return localStorage.getItem('chatbot-context') || ''
   })
+  const [totalUsage, setTotalUsage] = useState({ inputTokens: 0, outputTokens: 0 })
   const [currentModel, setCurrentModel] = useState(() => {
     const stored = localStorage.getItem('chatbot-model')
     return stored && MODEL_ORDER.includes(stored) ? stored : getDefaultModel()
@@ -100,6 +113,17 @@ export function ChatbotPanel({
       onInputChange?.('')
     }
   }, [initialInput, isOpen, onInputChange])
+
+  // Clear conversation when clearOnOpen is triggered (for AI tools)
+  useEffect(() => {
+    if (clearOnOpen && isOpen) {
+      setMessages([])
+      setEditingMessageId(null)
+      setTotalUsage({ inputTokens: 0, outputTokens: 0 })
+      localStorage.removeItem('chatbot-messages')
+      onClearOnOpenHandled?.()
+    }
+  }, [clearOnOpen, isOpen, onClearOnOpenHandled])
 
   // Initialize position on first open - always right side, full height
   // Branch panels are offset to the left of the main panel
@@ -157,11 +181,12 @@ export function ChatbotPanel({
     }
   }, [messages])
 
-  // Keyboard shortcut: Ctrl+Shift+K to clear conversation
+  // Keyboard shortcut: Clear conversation (customizable)
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+      const clearChatShortcut = getShortcut('clearChat')
+      if (matchesShortcut(e, clearChatShortcut)) {
         e.preventDefault()
         clearMessages()
       }
@@ -367,14 +392,28 @@ export function ChatbotPanel({
         })
       },
       currentModel,
-      context
+      context,
+      (usage) => {
+        // Update total usage
+        setTotalUsage(prev => ({
+          inputTokens: prev.inputTokens + (usage.input_tokens || 0),
+          outputTokens: prev.outputTokens + (usage.output_tokens || 0)
+        }))
+      }
     )
   }, [input, isStreaming, messages, editingMessageId, attachments, currentModel, context])
 
   const clearMessages = () => {
     setMessages([])
     setEditingMessageId(null)
+    setTotalUsage({ inputTokens: 0, outputTokens: 0 })
     localStorage.removeItem('chatbot-messages')
+  }
+
+  // Handle close button - clears conversation (minimize preserves state)
+  const handleClose = () => {
+    clearMessages()
+    onClose()
   }
 
   const handleEditMessage = useCallback((message) => {
@@ -484,7 +523,8 @@ export function ChatbotPanel({
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-gray-400 hover:text-white"
-            onClick={onClose}
+            onClick={handleClose}
+            title="Close and clear conversation"
           >
             <X className="w-3.5 h-3.5" />
           </Button>
@@ -573,6 +613,25 @@ export function ChatbotPanel({
             context={context}
             onContextChange={setContext}
           />
+
+          {/* Footer with cost and shortcut hint */}
+          <div className="px-3 py-1.5 border-t border-gray-700/50 bg-gray-900/30 flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center gap-3">
+              {(totalUsage.inputTokens > 0 || totalUsage.outputTokens > 0) && (
+                <span title={`Input: ${totalUsage.inputTokens.toLocaleString()} | Output: ${totalUsage.outputTokens.toLocaleString()}`}>
+                  Cost: ${calculateCost(totalUsage.inputTokens, totalUsage.outputTokens, currentModel).toFixed(4)}
+                </span>
+              )}
+              {(totalUsage.inputTokens > 0 || totalUsage.outputTokens > 0) && (
+                <span className="text-gray-600">
+                  {(totalUsage.inputTokens + totalUsage.outputTokens).toLocaleString()} tokens
+                </span>
+              )}
+            </div>
+            <span>
+              <kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">{formatShortcut(getShortcut('clearChat'))}</kbd> clear
+            </span>
+          </div>
         </>
       )}
 
