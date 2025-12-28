@@ -81,7 +81,7 @@ export function getDefaultModel() {
   return chatbotConfig.defaultModel
 }
 
-export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey) {
+export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey, context = '') {
   const { maxTokens, models, defaultModel } = chatbotConfig
   const apiKey = getApiKey()
   const selectedModel = models[modelKey || defaultModel]
@@ -97,6 +97,17 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
         role: m.role,
         content: buildMessageContent(m)
       }))
+    }
+
+    // Add system message with context if provided
+    if (context && context.trim()) {
+      requestBody.system = [
+        {
+          type: 'text',
+          text: `<context>\n${context.trim()}\n</context>`,
+          cache_control: { type: 'ephemeral' }
+        }
+      ]
     }
 
     // Only include tools if there are any configured

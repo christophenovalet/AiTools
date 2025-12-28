@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight, Key } from 'lucide-react'
+import { X, Minus, Maximize2, GripHorizontal, Trash2, ChevronRight, Key, GitBranch, ArrowUpToLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ChatbotMessage } from './ChatbotMessage'
 import { ChatbotInput } from './ChatbotInput'
@@ -20,7 +20,14 @@ export function ChatbotPanel({
   onClose,
   initialInput = '',
   onInputChange,
-  onOpenSettings
+  onOpenSettings,
+  // Branch-related props
+  isBranch = false,
+  branchId = null,
+  branchIndex = 0,
+  initialMessages = null,
+  onCopyToMain,
+  onBranch
 }) {
   const [apiKeyPresent, setApiKeyPresent] = useState(hasApiKey())
 
@@ -28,16 +35,25 @@ export function ChatbotPanel({
   useEffect(() => {
     const checkApiKey = () => setApiKeyPresent(hasApiKey())
     checkApiKey()
-    const interval = setInterval(checkApiKey, 1000)
+    const interval = setInterval(checkApiKey, 3000)
     return () => clearInterval(interval)
   }, [])
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => {
+    // For branches, use initialMessages; for main, try localStorage
+    if (isBranch && initialMessages) {
+      return initialMessages
+    }
+    return []
+  })
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState(null)
   const [attachments, setAttachments] = useState([])
+  const [context, setContext] = useState(() => {
+    return localStorage.getItem('chatbot-context') || ''
+  })
   const [currentModel, setCurrentModel] = useState(() => {
     const stored = localStorage.getItem('chatbot-model')
     return stored && MODEL_ORDER.includes(stored) ? stored : getDefaultModel()
@@ -49,6 +65,11 @@ export function ChatbotPanel({
   useEffect(() => {
     localStorage.setItem('chatbot-model', currentModel)
   }, [currentModel])
+
+  // Persist context
+  useEffect(() => {
+    localStorage.setItem('chatbot-context', context)
+  }, [context])
 
   const cycleModel = useCallback(() => {
     setCurrentModel(prev => {
@@ -81,20 +102,36 @@ export function ChatbotPanel({
   }, [initialInput, isOpen, onInputChange])
 
   // Initialize position on first open - always right side, full height
+  // Branch panels are offset to the left of the main panel
   useEffect(() => {
     if (isOpen && position.x === null) {
-      const width = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.5))
+      const width = isBranch
+        ? Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.35))
+        : Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.5))
       const height = window.innerHeight - 40
       setSize({ width, height })
-      setPosition({
-        x: window.innerWidth - width,
-        y: 20
-      })
-    }
-  }, [isOpen, position.x])
 
-  // Load messages from localStorage
+      if (isBranch) {
+        // Position branches to the left of the main panel, stacking them
+        const mainPanelWidth = Math.floor(window.innerWidth * 0.5)
+        const branchOffset = (branchIndex + 1) * (width + 10)
+        const xPos = Math.max(10, window.innerWidth - mainPanelWidth - branchOffset)
+        setPosition({
+          x: xPos,
+          y: 20
+        })
+      } else {
+        setPosition({
+          x: window.innerWidth - width,
+          y: 20
+        })
+      }
+    }
+  }, [isOpen, position.x, isBranch, branchIndex])
+
+  // Load messages from localStorage (only for main panel, not branches)
   useEffect(() => {
+    if (isBranch) return // Branches don't persist
     const stored = localStorage.getItem('chatbot-messages')
     if (stored) {
       try {
@@ -103,14 +140,15 @@ export function ChatbotPanel({
         // ignore
       }
     }
-  }, [])
+  }, [isBranch])
 
-  // Save messages to localStorage
+  // Save messages to localStorage (only for main panel, not branches)
   useEffect(() => {
+    if (isBranch) return // Branches don't persist
     if (messages.length > 0) {
       localStorage.setItem('chatbot-messages', JSON.stringify(messages))
     }
-  }, [messages])
+  }, [messages, isBranch])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -118,6 +156,19 @@ export function ChatbotPanel({
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight
     }
   }, [messages])
+
+  // Keyboard shortcut: Ctrl+Shift+K to clear conversation
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault()
+        clearMessages()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
 
   // Handle drag
   const handleMouseDown = (e) => {
@@ -315,9 +366,10 @@ export function ChatbotPanel({
           return newMessages
         })
       },
-      currentModel
+      currentModel,
+      context
     )
-  }, [input, isStreaming, messages, editingMessageId, attachments, currentModel])
+  }, [input, isStreaming, messages, editingMessageId, attachments, currentModel, context])
 
   const clearMessages = () => {
     setMessages([])
@@ -347,12 +399,34 @@ export function ChatbotPanel({
     }
   }, [messages])
 
+  // Handle branching from a message
+  const handleBranchFromMessage = useCallback((message) => {
+    if (!onBranch) return
+    // Find the index of the message and get all messages up to and including it
+    const msgIndex = messages.findIndex(m => m.id === message.id)
+    if (msgIndex === -1) return
+    const branchMessages = messages.slice(0, msgIndex + 1)
+    onBranch(branchMessages)
+  }, [messages, onBranch])
+
+  // Handle copying last assistant response to main
+  const handleCopyToMain = useCallback(() => {
+    if (!onCopyToMain) return
+    // Find the last assistant message
+    const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant')
+    if (lastAssistantMsg && lastAssistantMsg.content) {
+      onCopyToMain(lastAssistantMsg.content, branchId)
+    }
+  }, [messages, onCopyToMain, branchId])
+
   if (!isOpen) return null
 
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+      className={`fixed z-50 bg-[#1a1a1a] border rounded-xl shadow-2xl flex flex-col overflow-hidden ${
+        isBranch ? 'border-purple-600' : 'border-gray-700'
+      }`}
       style={{
         left: position.x ?? 'auto',
         top: position.y ?? 'auto',
@@ -364,10 +438,15 @@ export function ChatbotPanel({
       onMouseDown={handleMouseDown}
     >
       {/* Header */}
-      <div className="chatbot-drag-handle flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-gray-800/50 cursor-move select-none">
+      <div className={`chatbot-drag-handle flex items-center justify-between px-3 py-2 border-b cursor-move select-none ${
+        isBranch ? 'border-purple-700 bg-purple-900/30' : 'border-gray-700 bg-gray-800/50'
+      }`}>
         <div className="flex items-center gap-2">
           <GripHorizontal className="w-4 h-4 text-gray-500" />
-          <span className="text-gray-100 font-semibold text-sm">AI Assistant</span>
+          {isBranch && <GitBranch className="w-4 h-4 text-purple-400" />}
+          <span className={`font-semibold text-sm ${isBranch ? 'text-purple-200' : 'text-gray-100'}`}>
+            {isBranch ? 'AI Assistant Branch' : 'AI Assistant'}
+          </span>
           <span className="text-gray-600 text-sm">·</span>
           {/* Model Selector */}
           <button
@@ -389,7 +468,7 @@ export function ChatbotPanel({
             size="icon"
             className="h-6 w-6 text-gray-400 hover:text-red-400"
             onClick={clearMessages}
-            title="Clear conversation"
+            title="Clear conversation (Ctrl+Shift+K)"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
@@ -452,10 +531,29 @@ export function ChatbotPanel({
                   isStreaming={isStreaming && idx === messages.length - 1 && msg.role === 'assistant'}
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
+                  onBranch={handleBranchFromMessage}
+                  showBranch={!isBranch} // Hide branch button in branch panels
                 />
               ))
             )}
           </div>
+
+          {/* Copy to Main button for branch panels */}
+          {isBranch && messages.some(m => m.role === 'assistant' && m.content) && (
+            <div className="px-3 py-2 border-t border-purple-700/50 bg-purple-900/20">
+              <Button
+                onClick={handleCopyToMain}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium"
+                disabled={isStreaming}
+              >
+                <ArrowUpToLine className="w-4 h-4 mr-2" />
+                Copy to Main
+              </Button>
+              <p className="text-xs text-purple-300/60 text-center mt-1">
+                Adds the last response to main chat as context
+              </p>
+            </div>
+          )}
 
           {/* Input */}
           <ChatbotInput
@@ -472,6 +570,8 @@ export function ChatbotPanel({
             attachments={attachments}
             onAddAttachment={handleAddAttachment}
             onRemoveAttachment={handleRemoveAttachment}
+            context={context}
+            onContextChange={setContext}
           />
         </>
       )}

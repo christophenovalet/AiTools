@@ -6,20 +6,20 @@ import aiInstructionsData from '@/data/ai-instructions.json'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 
-// Subsequence matching: checks if all characters in filter appear in target in order
-function isSubsequence(filter, target) {
-  if (!filter) return true
-  let filterIndex = 0
-  const filterLower = filter.toLowerCase()
-  const targetLower = target.toLowerCase()
-
-  for (let i = 0; i < targetLower.length && filterIndex < filterLower.length; i++) {
-    if (targetLower[i] === filterLower[filterIndex]) {
-      filterIndex++
-    }
-  }
-
-  return filterIndex === filterLower.length
+// Regex-based fuzzy matching: converts filter to pattern like "c.*o.*n.*s"
+// Returns match score (lower = better) or null if no match
+// Score is based on: position of first match + total span of matched characters
+function getMatchScore(filter, target) {
+  if (!filter) return 0
+  const escapedChars = filter.split('').map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = escapedChars.join('.*')
+  const regex = new RegExp(pattern, 'i')
+  const match = target.match(regex)
+  if (!match) return null
+  // Score: position of match start + length of matched span (tighter matches score better)
+  const matchStart = match.index
+  const matchSpan = match[0].length
+  return matchStart * 100 + matchSpan
 }
 
 export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
@@ -38,18 +38,14 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
   })()
 
   const filteredTags = tags
-    .filter(tag =>
-      isSubsequence(filter, tag.name) ||
-      (tag.description && isSubsequence(filter, tag.description))
-    )
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(tag => ({ ...tag, score: getMatchScore(filter, tag.name) }))
+    .filter(tag => tag.score !== null)
+    .sort((a, b) => a.score - b.score)
 
   const filteredInstructions = aiInstructions
-    .filter(inst =>
-      isSubsequence(filter, inst.name) ||
-      (inst.description && isSubsequence(filter, inst.description))
-    )
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(inst => ({ ...inst, score: getMatchScore(filter, inst.name) }))
+    .filter(inst => inst.score !== null)
+    .sort((a, b) => a.score - b.score)
 
   // Focus filter on mount
   useEffect(() => {
@@ -88,6 +84,17 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
     onClose()
   }
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredTags.length > 0) {
+        handleTagClick(filteredTags[0])
+      } else if (filteredInstructions.length > 0) {
+        handleInstructionClick(filteredInstructions[0])
+      }
+    }
+  }
+
   return (
     <div
       ref={overlayRef}
@@ -106,6 +113,7 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Filter tags and instructions..."
               className="w-64 bg-[#1a1a1a] text-gray-100 text-sm border border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-cyan-500"
             />
@@ -190,7 +198,7 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
         {/* Footer */}
         <div className="p-3 border-t border-gray-700 bg-[#0a0a0a] text-center">
           <span className="text-xs text-gray-500">
-            Click a card to insert • Press <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">ESC</kbd> to close
+            Click a card to insert • <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">Enter</kbd> to insert first match • <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">ESC</kbd> to close
           </span>
         </div>
       </div>

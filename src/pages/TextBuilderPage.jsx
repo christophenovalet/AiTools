@@ -42,6 +42,37 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     text: ''
   })
 
+  // Branch state (max 3 branches)
+  const [branches, setBranches] = useState([])
+  const MAX_BRANCHES = 3
+
+  // Handle creating a new branch
+  const handleCreateBranch = useCallback((messagesUpToPoint) => {
+    if (branches.length >= MAX_BRANCHES) {
+      alert(`Maximum of ${MAX_BRANCHES} branches allowed. Please close a branch first.`)
+      return
+    }
+    const newBranch = {
+      id: Date.now().toString(),
+      messages: messagesUpToPoint.map(m => ({ ...m })) // Deep copy messages
+    }
+    setBranches(prev => [...prev, newBranch])
+  }, [branches.length])
+
+  // Handle closing a branch
+  const handleCloseBranch = useCallback((branchId) => {
+    setBranches(prev => prev.filter(b => b.id !== branchId))
+  }, [])
+
+  // Handle copying branch content to main context
+  const handleCopyToMain = useCallback((content, branchId) => {
+    // Wrap the content in context tags and add to chatbot input
+    const wrappedContent = `<context>\n${content}\n</context>`
+    setChatbotInput(prev => prev ? `${prev}\n\n${wrappedContent}` : wrappedContent)
+    // Close the branch after copying
+    handleCloseBranch(branchId)
+  }, [handleCloseBranch])
+
   // Keyboard shortcut: Ctrl+Shift+Space to toggle tags overlay
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -548,14 +579,30 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         />
       )}
 
-      {/* Chatbot Panel */}
+      {/* Main Chatbot Panel */}
       <ChatbotPanel
         isOpen={isChatbotOpen}
         onClose={() => setIsChatbotOpen(false)}
         initialInput={chatbotInput}
         onInputChange={setChatbotInput}
         onOpenSettings={onOpenSettings}
+        onBranch={handleCreateBranch}
       />
+
+      {/* Branch Panels */}
+      {branches.map((branch, index) => (
+        <ChatbotPanel
+          key={branch.id}
+          isOpen={true}
+          onClose={() => handleCloseBranch(branch.id)}
+          isBranch={true}
+          branchId={branch.id}
+          branchIndex={index}
+          initialMessages={branch.messages}
+          onCopyToMain={handleCopyToMain}
+          onOpenSettings={onOpenSettings}
+        />
+      ))}
     </div>
   )
 }

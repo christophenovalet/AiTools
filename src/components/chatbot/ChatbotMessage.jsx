@@ -2,10 +2,10 @@ import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
-import { User, Bot, Copy, Check, Pencil, FileText, Image, Globe, ExternalLink, Loader2, AlertCircle, Trash2 } from 'lucide-react'
+import { User, Bot, Copy, Check, Pencil, FileText, Image, Globe, ExternalLink, Loader2, AlertCircle, Trash2, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-export function ChatbotMessage({ message, isStreaming = false, onEdit, onDelete }) {
+export function ChatbotMessage({ message, isStreaming = false, onEdit, onDelete, onBranch, showBranch = true }) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
 
@@ -167,6 +167,17 @@ export function ChatbotMessage({ message, isStreaming = false, onEdit, onDelete 
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
           </Button>
+          {showBranch && onBranch && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-gray-400 hover:text-purple-400 hover:bg-gray-700"
+              onClick={() => onBranch(message)}
+              title="Branch conversation from here"
+            >
+              <GitBranch className="w-3.5 h-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"

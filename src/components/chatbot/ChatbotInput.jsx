@@ -1,6 +1,6 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Send, Loader2, X, Pencil, Paperclip, Image, FileText } from 'lucide-react'
+import { Send, Loader2, X, Pencil, Paperclip, FileText, FileCode } from 'lucide-react'
 
 const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const SUPPORTED_DOC_TYPES = ['application/pdf']
@@ -14,10 +14,14 @@ export function ChatbotInput({
   onCancelEdit,
   attachments = [],
   onAddAttachment,
-  onRemoveAttachment
+  onRemoveAttachment,
+  context = '',
+  onContextChange
 }) {
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
+  const [isContextOpen, setIsContextOpen] = useState(false)
+  const contextTextareaRef = useRef(null)
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -109,6 +113,32 @@ export function ChatbotInput({
 
   return (
     <div className="border-t border-gray-700 p-3">
+      {/* Context Pane - slides above input */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out ${
+          isContextOpen ? 'max-h-48 mb-3' : 'max-h-0'
+        }`}
+      >
+        <div className="bg-gray-800/50 rounded-lg border border-gray-600 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
+              <FileCode className="w-3.5 h-3.5 text-purple-400" />
+              Context (added to system prompt)
+            </span>
+            <span className="text-xs text-gray-500">
+              {context.length > 0 ? `${context.length} chars` : ''}
+            </span>
+          </div>
+          <textarea
+            ref={contextTextareaRef}
+            value={context}
+            onChange={(e) => onContextChange?.(e.target.value)}
+            placeholder="Paste context here (documentation, code, data...). This will be cached for faster follow-up messages."
+            className="w-full h-28 resize-none rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-sm text-gray-200 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
       {isEditing && (
         <div className="flex items-center gap-2 mb-2 text-xs text-amber-400">
           <Pencil className="w-3 h-3" />
@@ -165,6 +195,29 @@ export function ChatbotInput({
           onChange={handleFileSelect}
           className="hidden"
         />
+
+        {/* Context button */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={`h-10 w-10 flex-shrink-0 transition-colors ${
+            isContextOpen
+              ? 'text-purple-400 bg-purple-500/10 hover:bg-purple-500/20'
+              : context.length > 0
+              ? 'text-purple-400 hover:text-purple-300 hover:bg-gray-700'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+          }`}
+          onClick={() => setIsContextOpen(!isContextOpen)}
+          title={isContextOpen ? 'Hide context' : 'Add context'}
+        >
+          <div className="relative">
+            <FileCode className="w-4 h-4" />
+            {context.length > 0 && !isContextOpen && (
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-500 rounded-full" />
+            )}
+          </div>
+        </Button>
 
         {/* Attach button */}
         <Button

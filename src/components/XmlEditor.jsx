@@ -69,6 +69,19 @@ const XmlEditor = forwardRef(function XmlEditor({
         text: view.state.sliceDoc(from, to)
       }
     },
+    getSelectionCoords: () => {
+      const view = editorRef.current?.view
+      if (!view) return null
+      const { from, to } = view.state.selection.main
+      if (from === to) return null
+      const startCoords = view.coordsAtPos(from)
+      const endCoords = view.coordsAtPos(to)
+      if (!startCoords || !endCoords) return null
+      return {
+        x: (startCoords.left + endCoords.right) / 2,
+        y: startCoords.top - 45
+      }
+    },
     insertAtCursor: (text) => {
       const view = editorRef.current?.view
       if (!view) return
@@ -78,12 +91,13 @@ const XmlEditor = forwardRef(function XmlEditor({
         selection: { anchor: from + text.length }
       })
     },
-    replaceSelection: (text) => {
+    replaceSelection: (text, cursorOffset = null) => {
       const view = editorRef.current?.view
       if (!view) return
       const { from, to } = view.state.selection.main
       view.dispatch({
-        changes: { from, to, insert: text }
+        changes: { from, to, insert: text },
+        selection: { anchor: cursorOffset !== null ? from + cursorOffset : from + text.length }
       })
     },
     focus: () => {
