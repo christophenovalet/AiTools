@@ -1,10 +1,16 @@
-import React from 'react'
+import React, { useRef, useImperativeHandle, forwardRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { MessageSquare, LayoutTemplate, RefreshCw, Code2 } from 'lucide-react'
 import { getMenuItems, formatTemplate } from '@/lib/claude-api'
 
-export function SelectionToolbar({ position, selectedText, onAction }) {
+export const SelectionToolbar = forwardRef(function SelectionToolbar({ position, selectedText, onAction }, ref) {
+  const toolbarRef = useRef(null)
   const menuItems = getMenuItems()
+
+  // Expose a method to check if an element is inside the toolbar
+  useImperativeHandle(ref, () => ({
+    contains: (element) => toolbarRef.current?.contains(element)
+  }))
 
   const handleClick = (item) => {
     const formattedPrompt = formatTemplate(item.template, selectedText)
@@ -30,13 +36,14 @@ export function SelectionToolbar({ position, selectedText, onAction }) {
 
   return (
     <div
+      ref={toolbarRef}
       className="fixed z-40 bg-[#1a1a1a] border border-gray-600 rounded-lg shadow-xl flex gap-1 p-1"
       style={{
         left: position.x,
         top: position.y,
         transform: 'translateX(-50%)'
       }}
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
     >
       {menuItems.map((item) => (
         <Button
@@ -52,4 +59,4 @@ export function SelectionToolbar({ position, selectedText, onAction }) {
       ))}
     </div>
   )
-}
+})

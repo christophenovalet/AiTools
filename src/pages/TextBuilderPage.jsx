@@ -33,6 +33,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [contentToSave, setContentToSave] = useState('')
   const [showProjectsModal, setShowProjectsModal] = useState(false)
   const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId }
+  const [expandedBlocksColumns, setExpandedBlocksColumns] = useState(new Set()) // Track which columns have blocks expanded
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
@@ -43,6 +44,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     position: null,
     text: ''
   })
+  const selectionToolbarRef = useRef(null)
 
   // Branch state (max 3 branches)
   const [branches, setBranches] = useState([])
@@ -114,8 +116,11 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
 
   // Listen for mouseup to check selection
   useEffect(() => {
-    const handleMouseUp = () => {
-      setTimeout(handleSelectionCheck, 10)
+    const handleMouseUp = (e) => {
+      // Only check selection if mouseup is inside a CodeMirror editor
+      if (e.target.closest('.cm-editor')) {
+        setTimeout(handleSelectionCheck, 10)
+      }
     }
     const handleKeyUp = (e) => {
       if (e.shiftKey) {
@@ -130,14 +135,25 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     }
   }, [handleSelectionCheck])
 
-  // Any key to close selection toolbar
+  // Any key or click to close selection toolbar
   useEffect(() => {
     if (!selectionToolbar.visible) return
     const handleKeyDown = () => {
       setSelectionToolbar({ visible: false, position: null, text: '' })
     }
+    const handleMouseDown = (e) => {
+      // Don't close if clicking inside the toolbar
+      if (selectionToolbarRef.current?.contains(e.target)) {
+        return
+      }
+      setSelectionToolbar({ visible: false, position: null, text: '' })
+    }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('mousedown', handleMouseDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mousedown', handleMouseDown)
+    }
   }, [selectionToolbar.visible])
 
   // Handle toolbar action - clears conversation and opens with new prompt
@@ -146,6 +162,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     setClearChatOnOpen(true)
     setIsChatbotOpen(true)
     setSelectionToolbar({ visible: false, position: null, text: '' })
+    // Clear the text selection to prevent toolbar from reappearing on mouseup
+    window.getSelection()?.removeAllRanges()
   }, [])
 
   const updateColumn = (index, updatedColumn) => {
@@ -184,6 +202,13 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
 
       // Remove selected blocks from this column
       setSelectedBlocks(selectedBlocks.filter(block => block.columnId !== columnToRemove.id))
+
+      // Remove from expanded blocks columns
+      setExpandedBlocksColumns(prev => {
+        const next = new Set(prev)
+        next.delete(columnToRemove.id)
+        return next
+      })
     }
   }
 
@@ -321,12 +346,26 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     setFocusedTextareaRef(editorRef)
   }
 
+  // Toggle blocks expanded state for a column
+  const toggleBlocksExpanded = useCallback((columnId) => {
+    setExpandedBlocksColumns(prev => {
+      const next = new Set(prev)
+      if (next.has(columnId)) {
+        next.delete(columnId)
+      } else {
+        next.add(columnId)
+      }
+      return next
+    })
+  }, [])
+
   // Get the full workspace state for saving
   const getWorkspaceState = () => ({
     columns,
     selectedBlocks,
     nextId,
-    previewText
+    previewText,
+    expandedBlocksColumns: Array.from(expandedBlocksColumns) // Convert Set to array for JSON serialization
   })
 
   // Restore workspace state from a saved text
@@ -335,6 +374,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     if (state.selectedBlocks) setSelectedBlocks(state.selectedBlocks)
     if (state.nextId) setNextId(state.nextId)
     if (state.previewText !== undefined) setPreviewText(state.previewText)
+    if (state.expandedBlocksColumns) setExpandedBlocksColumns(new Set(state.expandedBlocksColumns))
   }
 
   const handleSaveToProject = () => {
@@ -379,6 +419,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     setMaximizedSourceId(null)
     setPreviewText(null)
     setLastSavedRef(null) // Reset save reference
+    setExpandedBlocksColumns(new Set()) // Reset expanded blocks
   }
 
   return (
@@ -489,6 +530,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
                     onMaximize={(id) => setMaximizedSourceId(id)}
                     isMaximized={true}
                     onEditorFocus={handleEditorFocus}
+                    blocksExpanded={expandedBlocksColumns.has(maximizedSourceId)}
+                    onToggleBlocksExpanded={toggleBlocksExpanded}
                   />
                 </div>
               </div>
@@ -512,6 +555,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
                       onMaximize={(id) => setMaximizedSourceId(id)}
                       isMaximized={false}
                       onEditorFocus={handleEditorFocus}
+                      blocksExpanded={expandedBlocksColumns.has(column.id)}
+                      onToggleBlocksExpanded={toggleBlocksExpanded}
                     />
                   </div>
                 ))}
@@ -519,16 +564,18 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
             )}
           </div>
 
-          {/* Output Column - Right side */}
-          <div className="h-full min-h-0 w-[360px] flex-shrink-0">
-            <OutputColumn
-              selectedBlocks={selectedBlocks}
-              onClear={clearOutput}
-              onReorder={reorderSelectedBlocks}
-              onAddBlock={addBlockFromDrop}
-              onOpenPreview={openPreview}
-            />
-          </div>
+          {/* Output Column - Right side (only show when at least one block section is expanded) */}
+          {expandedBlocksColumns.size > 0 && (
+            <div className="h-full min-h-0 w-[360px] flex-shrink-0">
+              <OutputColumn
+                selectedBlocks={selectedBlocks}
+                onClear={clearOutput}
+                onReorder={reorderSelectedBlocks}
+                onAddBlock={addBlockFromDrop}
+                onOpenPreview={openPreview}
+              />
+            </div>
+          )}
 
           {/* Preview Column - After Output */}
           {previewText !== null && (
@@ -577,6 +624,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
       {/* Selection Toolbar */}
       {selectionToolbar.visible && (
         <SelectionToolbar
+          ref={selectionToolbarRef}
           position={selectionToolbar.position}
           selectedText={selectionToolbar.text}
           onAction={handleToolbarAction}
