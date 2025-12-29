@@ -9,8 +9,9 @@ import { ProjectsModal } from '@/components/ProjectsModal'
 import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
 import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings, GitCompare } from 'lucide-react'
 import { getShortcut, matchesShortcut, formatShortcut } from '@/lib/keyboard-shortcuts'
+import { CompareColumnsModal } from '@/components/CompareColumnsModal'
 
 export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [columns, setColumns] = useState([
@@ -34,6 +35,10 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [showProjectsModal, setShowProjectsModal] = useState(false)
   const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId }
   const [expandedBlocksColumns, setExpandedBlocksColumns] = useState(new Set()) // Track which columns have blocks expanded
+
+  // Compare columns state
+  const [columnsSelectedForCompare, setColumnsSelectedForCompare] = useState(new Set())
+  const [showCompareModal, setShowCompareModal] = useState(false)
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
@@ -392,6 +397,39 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     })
   }, [])
 
+  // Toggle column selection for comparison
+  const toggleCompareColumn = useCallback((columnId) => {
+    setColumnsSelectedForCompare(prev => {
+      const next = new Set(prev)
+      if (next.has(columnId)) {
+        next.delete(columnId)
+      } else {
+        next.add(columnId)
+      }
+      return next
+    })
+  }, [])
+
+  // Get columns selected for comparison as array
+  const getCompareColumns = useCallback(() => {
+    return columns.filter(col => columnsSelectedForCompare.has(col.id))
+  }, [columns, columnsSelectedForCompare])
+
+  // Handle applying changes from compare modal back to columns
+  const handleApplyCompareChanges = useCallback((updatedVersions) => {
+    setColumns(prev => {
+      const newColumns = [...prev]
+      updatedVersions.forEach(updated => {
+        const idx = newColumns.findIndex(col => col.id === updated.id)
+        if (idx !== -1) {
+          newColumns[idx] = { ...newColumns[idx], text: updated.text }
+        }
+      })
+      return newColumns
+    })
+    setShowCompareModal(false)
+  }, [])
+
   // Get the full workspace state for saving
   const getWorkspaceState = () => ({
     columns,
@@ -499,6 +537,17 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
               AI Chat
             </Button>
             <Button
+              onClick={() => setShowCompareModal(true)}
+              disabled={columnsSelectedForCompare.size < 2}
+              variant="ghost"
+              className={columnsSelectedForCompare.size >= 2
+                ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
+                : "text-gray-500"}
+            >
+              <GitCompare className="mr-2 h-4 w-4" />
+              Compare {columnsSelectedForCompare.size > 0 && `(${columnsSelectedForCompare.size})`}
+            </Button>
+            <Button
               onClick={handleSaveToProject}
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
             >
@@ -564,6 +613,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
                     onEditorFocus={handleEditorFocus}
                     blocksExpanded={expandedBlocksColumns.has(maximizedSourceId)}
                     onToggleBlocksExpanded={toggleBlocksExpanded}
+                    isSelectedForCompare={columnsSelectedForCompare.has(maximizedSourceId)}
+                    onToggleCompare={toggleCompareColumn}
                   />
                 </div>
               </div>
@@ -589,6 +640,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
                       onEditorFocus={handleEditorFocus}
                       blocksExpanded={expandedBlocksColumns.has(column.id)}
                       onToggleBlocksExpanded={toggleBlocksExpanded}
+                      isSelectedForCompare={columnsSelectedForCompare.has(column.id)}
+                      onToggleCompare={toggleCompareColumn}
                     />
                   </div>
                 ))}
@@ -651,6 +704,14 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
             setLastSavedRef({ projectId, textId: text.id })
           }
         }}
+      />
+
+      {/* Compare Columns Modal */}
+      <CompareColumnsModal
+        isOpen={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        columns={getCompareColumns()}
+        onApplyChanges={handleApplyCompareChanges}
       />
 
       {/* Selection Toolbar */}

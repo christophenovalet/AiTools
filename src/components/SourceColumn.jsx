@@ -1,10 +1,10 @@
 import React, { useRef } from 'react'
 import { TextBlock } from './TextBlock'
-import { Trash2, Maximize2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Trash2, Maximize2, ChevronDown, ChevronUp, GitCompare } from 'lucide-react'
 import { Button } from './ui/button'
 import XmlEditor from './XmlEditor'
 
-export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onEditorFocus, blocksExpanded, onToggleBlocksExpanded }) {
+export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onEditorFocus, blocksExpanded, onToggleBlocksExpanded, isSelectedForCompare, onToggleCompare }) {
   const editorRef = useRef(null)
 
   const parseTextIntoBlocks = (text) => {
@@ -28,13 +28,28 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
     <div className="flex flex-col h-full min-h-0 bg-[#1a1a1a] rounded-lg border border-gray-700 overflow-hidden">
       {/* Header - Fixed */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-[#0a0a0a] flex-shrink-0">
-        <input
-          type="text"
-          value={column.title}
-          onChange={(e) => onUpdateText({ ...column, title: e.target.value })}
-          className="bg-transparent text-gray-100 font-semibold text-sm border-none outline-none flex-1"
-          placeholder="Column title"
-        />
+        <div className="flex items-center gap-2 flex-1">
+          {onToggleCompare && (
+            <button
+              onClick={() => onToggleCompare(column.id)}
+              className={`flex items-center justify-center w-5 h-5 rounded border transition-colors ${
+                isSelectedForCompare
+                  ? 'bg-orange-500 border-orange-500 text-white'
+                  : 'border-gray-600 text-gray-500 hover:border-orange-400 hover:text-orange-400'
+              }`}
+              title="Select for comparison"
+            >
+              <GitCompare className="w-3 h-3" />
+            </button>
+          )}
+          <input
+            type="text"
+            value={column.title}
+            onChange={(e) => onUpdateText({ ...column, title: e.target.value })}
+            className="bg-transparent text-gray-100 font-semibold text-sm border-none outline-none flex-1"
+            placeholder="Column title"
+          />
+        </div>
         {canRemove && (
           <Button
             onClick={onRemove}
