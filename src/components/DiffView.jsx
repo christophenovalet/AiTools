@@ -2,30 +2,153 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
+import * as Diff from 'diff'
 
+// Compute word-level diff for modified lines
+function getWordDiff(oldText, newText) {
+  const wordDiff = Diff.diffWords(oldText, newText)
+  return wordDiff
+}
+
+// Compute line-based diff using the diff library
 function computeDiff(text1, text2) {
-  const lines1 = text1.split('\n')
-  const lines2 = text2.split('\n')
-  const maxLines = Math.max(lines1.length, lines2.length)
-  
-  const diff = []
-  
-  for (let i = 0; i < maxLines; i++) {
-    const line1 = lines1[i] ?? ''
-    const line2 = lines2[i] ?? ''
-    
-    if (line1 === line2) {
-      diff.push({ type: 'unchanged', line1, line2, lineNum: i + 1 })
-    } else if (i >= lines1.length) {
-      diff.push({ type: 'added', line1: '', line2, lineNum: i + 1 })
-    } else if (i >= lines2.length) {
-      diff.push({ type: 'removed', line1, line2: '', lineNum: i + 1 })
+  const changes = Diff.diffLines(text1, text2)
+  const result = []
+
+  let leftLineNum = 1
+  let rightLineNum = 1
+
+  for (const change of changes) {
+    const lines = change.value.replace(/\n$/, '').split('\n')
+
+    if (change.added) {
+      // Lines only in text2 (right side)
+      for (const line of lines) {
+        result.push({
+          type: 'added',
+          line1: '',
+          line2: line,
+          leftLineNum: null,
+          rightLineNum: rightLineNum++
+        })
+      }
+    } else if (change.removed) {
+      // Lines only in text1 (left side)
+      for (const line of lines) {
+        result.push({
+          type: 'removed',
+          line1: line,
+          line2: '',
+          leftLineNum: leftLineNum++,
+          rightLineNum: null
+        })
+      }
     } else {
-      diff.push({ type: 'modified', line1, line2, lineNum: i + 1 })
+      // Unchanged lines
+      for (const line of lines) {
+        result.push({
+          type: 'unchanged',
+          line1: line,
+          line2: line,
+          leftLineNum: leftLineNum++,
+          rightLineNum: rightLineNum++
+        })
+      }
     }
   }
-  
-  return diff
+
+  // Post-process to pair up adjacent removed/added lines as "modified"
+  const processed = []
+  let i = 0
+
+  while (i < result.length) {
+    const current = result[i]
+
+    // Look for removed lines followed by added lines to pair them as modified
+    if (current.type === 'removed') {
+      const removedLines = []
+      let j = i
+
+      // Collect consecutive removed lines
+      while (j < result.length && result[j].type === 'removed') {
+        removedLines.push(result[j])
+        j++
+      }
+
+      // Collect consecutive added lines
+      const addedLines = []
+      while (j < result.length && result[j].type === 'added') {
+        addedLines.push(result[j])
+        j++
+      }
+
+      // Pair them up as modified where possible
+      const maxPairs = Math.min(removedLines.length, addedLines.length)
+
+      for (let k = 0; k < maxPairs; k++) {
+        processed.push({
+          type: 'modified',
+          line1: removedLines[k].line1,
+          line2: addedLines[k].line2,
+          leftLineNum: removedLines[k].leftLineNum,
+          rightLineNum: addedLines[k].rightLineNum,
+          wordDiff: getWordDiff(removedLines[k].line1, addedLines[k].line2)
+        })
+      }
+
+      // Add remaining removed lines
+      for (let k = maxPairs; k < removedLines.length; k++) {
+        processed.push(removedLines[k])
+      }
+
+      // Add remaining added lines
+      for (let k = maxPairs; k < addedLines.length; k++) {
+        processed.push(addedLines[k])
+      }
+
+      i = j
+    } else {
+      processed.push(current)
+      i++
+    }
+  }
+
+  return processed
+}
+
+// Render word-level diff highlighting
+function WordDiffDisplay({ wordDiff, side }) {
+  if (!wordDiff) return null
+
+  return (
+    <>
+      {wordDiff.map((part, idx) => {
+        if (side === 'left') {
+          // Left side: show removed (highlighted) and unchanged
+          if (part.added) return null
+          return (
+            <span
+              key={idx}
+              className={part.removed ? 'bg-red-500/40 rounded px-0.5' : ''}
+            >
+              {part.value}
+            </span>
+          )
+        } else {
+          // Right side: show added (highlighted) and unchanged
+          if (part.removed) return null
+          return (
+            <span
+              key={idx}
+              className={part.added ? 'bg-green-500/40 rounded px-0.5' : ''}
+            >
+              {part.value}
+            </span>
+          )
+        }
+      })}
+    </>
+  )
 }
 
 function DiffLine({ diffLine }) {
@@ -41,16 +164,31 @@ function DiffLine({ diffLine }) {
         return 'bg-transparent'
     }
   }
-  
+
+  const renderContent = (line, side) => {
+    if (diffLine.type === 'modified' && diffLine.wordDiff) {
+      return <WordDiffDisplay wordDiff={diffLine.wordDiff} side={side} />
+    }
+    return line || ' '
+  }
+
   return (
     <div className={`grid grid-cols-2 gap-4 font-mono text-sm ${getBackgroundClass()} py-1 px-2`}>
       <div className="flex gap-2">
-        <span className="text-gray-600 w-10 text-right select-none">{diffLine.lineNum}</span>
-        <span className="text-gray-200 whitespace-pre-wrap break-all">{diffLine.line1 || ' '}</span>
+        <span className="text-gray-600 w-10 text-right select-none">
+          {diffLine.leftLineNum ?? ''}
+        </span>
+        <span className="text-gray-200 whitespace-pre-wrap break-all">
+          {renderContent(diffLine.line1, 'left')}
+        </span>
       </div>
       <div className="flex gap-2 border-l border-[#333333] pl-4">
-        <span className="text-gray-600 w-10 text-right select-none">{diffLine.lineNum}</span>
-        <span className="text-gray-200 whitespace-pre-wrap break-all">{diffLine.line2 || ' '}</span>
+        <span className="text-gray-600 w-10 text-right select-none">
+          {diffLine.rightLineNum ?? ''}
+        </span>
+        <span className="text-gray-200 whitespace-pre-wrap break-all">
+          {renderContent(diffLine.line2, 'right')}
+        </span>
       </div>
     </div>
   )
@@ -58,12 +196,12 @@ function DiffLine({ diffLine }) {
 
 export function DiffView({ versions, masterIndex, onBack }) {
   const includedVersions = versions.filter(v => v.included)
-  
+
   const comparisons = []
-  
+
   if (masterIndex !== null) {
     const masterVersion = versions[masterIndex]
-    includedVersions.forEach((version, idx) => {
+    includedVersions.forEach((version) => {
       if (versions.indexOf(version) !== masterIndex) {
         comparisons.push({
           title1: masterVersion.title,
@@ -83,7 +221,7 @@ export function DiffView({ versions, masterIndex, onBack }) {
       }
     }
   }
-  
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -97,7 +235,7 @@ export function DiffView({ versions, masterIndex, onBack }) {
             Back to Editor
           </Button>
         </div>
-        
+
         {comparisons.length === 0 ? (
           <Card className="bg-[#1a1a1a] border-[#333333]">
             <CardContent className="p-12 text-center">
@@ -125,7 +263,7 @@ export function DiffView({ versions, masterIndex, onBack }) {
             </Card>
           ))
         )}
-        
+
         <div className="pt-4 pb-8 text-center">
           <div className="inline-flex gap-6 text-sm text-gray-400">
             <div className="flex items-center gap-2">
