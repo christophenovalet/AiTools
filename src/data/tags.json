@@ -26,11 +26,10 @@
   {"id":27,"name":"Current_Code","description":"Existing code to modify (dev tasks)","action":"The feature is already implemented in the codebase and should not be re-developped"},
   {"id":28,"name":"feature_request","description":"New functionality to implement"},
   {"id":29,"name":"extract","description":"What to pull from a source", "action": "the following should be extracted from the source"},
-  {"id":29,"name":"extract","description":"What to pull from a source", "action": "the following should be extracted from the source"},
   {"id":1766738049618,"name":"source","description":"The source to pull from "},
   {"id":1766738049619,"name":"destination","description":"The destination to push to"},
   {"id":1766738049617,"name":"UseCase id='1'","description":"Use case"},
-  {"id":1766739966871,"name":"Ask","description":"The agent should ask questions about this topic before continuing"},
+  {"id":1766739966871,"name":"Ask","description":"Questions before going further","action":"Questions to be asked before going further or coding"},
   {"id":1766740094343,"name":"Dependency","description":"This should be implemented before going into this section"},
   {"id":1766741950388,"name":"Pain_Points","description":"Painfull actions that needs to be improved"},
   {"id":1766742000000,"name":"web_search","description":"Indicates the AI should search the web for current information"},
@@ -41,5 +40,13 @@
   {"id":1766742000005,"name":"Precondition","description":"Requirements that must be met before execution"},
   {"id":1766742000006,"name":"backend","description":"Server-side logic, APIs, database operations"},
   {"id":1766742000007,"name":"frontend","description":"Client-side UI, components, user interactions"},
-  {"id":1766742000008,"name":"data","description":"Data structures, models, schemas, or datasets"}
+  {"id":1766742000008,"name":"data","description":"Data structures, models, schemas, or datasets"},
+  {"id":1766742000010,"name":"actors","description":"Involved parties, users, or systems in the scenario"},
+  {"id":1766742000011,"name":"postcondition","description":"Expected state/results after execution completes"},
+  {"id":1766742000012,"name":"success_flow","description":"Main happy path - step-by-step expected behavior"},
+  {"id":1766742000013,"name":"exceptions","description":"Error conditions, invalid states, and fallback actions"},
+  {"id":1766742000014,"name":"variants","description":"Alternative paths, optional configurations, conditional behaviors"},
+  {"id":1766742000015,"name":"assumptions","description":"Implicit business or technical assumptions"},
+  {"id":1766742000016,"name":"story","description":"Short summary of the business need or problem being solved"},
+  {"id":1766742000017,"name":"notes","description":"Additional comments, dependencies, or TODOs"}
 ]
