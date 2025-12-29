@@ -89,7 +89,7 @@ export function getDefaultModel() {
   return chatbotConfig.defaultModel
 }
 
-export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey, context = '', onUsage = null) {
+export async function sendMessage(messages, onChunk, onComplete, onError, onSearchStart, onSearchResult, modelKey, context = '', onUsage = null, signal = null) {
   const { maxTokens, models, defaultModel } = chatbotConfig
   const apiKey = getApiKey()
   const selectedModel = models[modelKey || defaultModel]
@@ -123,7 +123,7 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
       requestBody.tools = tools
     }
 
-    const response = await fetch(API_URL, {
+    const fetchOptions = {
       method: 'POST',
       headers: {
         'anthropic-version': '2023-06-01',
@@ -132,7 +132,14 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify(requestBody)
-    })
+    }
+
+    // Add abort signal if provided
+    if (signal) {
+      fetchOptions.signal = signal
+    }
+
+    const response = await fetch(API_URL, fetchOptions)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -231,6 +238,11 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
 
     onComplete(searchResults)
   } catch (error) {
+    // Handle abort separately - don't treat as error
+    if (error.name === 'AbortError') {
+      onComplete([]) // Complete gracefully with no search results
+      return
+    }
     onError(error)
   }
 }

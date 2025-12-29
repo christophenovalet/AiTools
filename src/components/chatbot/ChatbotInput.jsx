@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Send, Loader2, X, Pencil, Paperclip, FileText, FileCode } from 'lucide-react'
+import { Send, Square, X, Pencil, Paperclip, FileText, FileCode } from 'lucide-react'
 
 const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const SUPPORTED_DOC_TYPES = ['application/pdf']
@@ -9,6 +9,7 @@ export function ChatbotInput({
   value,
   onChange,
   onSend,
+  onStop,
   isStreaming,
   isEditing,
   onCancelEdit,
@@ -247,22 +248,29 @@ export function ChatbotInput({
           }`}
           rows={1}
         />
-        <Button
-          onClick={onSend}
-          disabled={!canSend}
-          size="icon"
-          className={`h-10 w-10 text-white ${
-            isEditing
-              ? 'bg-amber-600 hover:bg-amber-500'
-              : 'bg-cyan-600 hover:bg-cyan-500'
-          }`}
-        >
-          {isStreaming ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
+        {isStreaming ? (
+          <Button
+            onClick={onStop}
+            size="icon"
+            className="h-10 w-10 text-white bg-red-600 hover:bg-red-500"
+            title="Stop streaming"
+          >
+            <Square className="w-4 h-4 fill-current" />
+          </Button>
+        ) : (
+          <Button
+            onClick={onSend}
+            disabled={!canSend}
+            size="icon"
+            className={`h-10 w-10 text-white ${
+              isEditing
+                ? 'bg-amber-600 hover:bg-amber-500'
+                : 'bg-cyan-600 hover:bg-cyan-500'
+            }`}
+          >
             <Send className="w-4 h-4" />
-          )}
-        </Button>
+          </Button>
+        )}
       </div>
       <div className="text-xs text-gray-500 mt-1">
         {isEditing

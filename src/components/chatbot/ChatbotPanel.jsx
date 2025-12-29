@@ -105,6 +105,7 @@ export function ChatbotPanel({
 
   const panelRef = useRef(null)
   const messagesRef = useRef(null)
+  const abortControllerRef = useRef(null)
 
   // Set initial input when opened with prefilled text
   useEffect(() => {
@@ -321,6 +322,9 @@ export function ChatbotPanel({
     setAttachments([])
     setIsStreaming(true)
 
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController()
+
     await sendMessage(
       conversationMessages,
       (chunk) => {
@@ -399,9 +403,19 @@ export function ChatbotPanel({
           inputTokens: prev.inputTokens + (usage.input_tokens || 0),
           outputTokens: prev.outputTokens + (usage.output_tokens || 0)
         }))
-      }
+      },
+      abortControllerRef.current?.signal
     )
   }, [input, isStreaming, messages, editingMessageId, attachments, currentModel, context])
+
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setIsStreaming(false)
+    setIsSearching(false)
+  }, [])
 
   const clearMessages = () => {
     setMessages([])
@@ -600,6 +614,7 @@ export function ChatbotPanel({
             value={input}
             onChange={setInput}
             onSend={handleSend}
+            onStop={handleStop}
             isStreaming={isStreaming}
             isEditing={!!editingMessageId}
             onCancelEdit={() => {

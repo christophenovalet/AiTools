@@ -2,18 +2,44 @@ import React, { useState } from 'react'
 import { ComparisonPanel } from '@/components/ComparisonPanel'
 import { DiffView } from '@/components/DiffView'
 import { Button } from '@/components/ui/button'
-import { Plus, Copy, GitCompare, Home } from 'lucide-react'
+import { Plus, Copy, GitCompare, Home, ArrowUpAZ } from 'lucide-react'
+
+// Recursively sort all keys in a JSON object alphabetically
+function sortJsonKeys(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(sortJsonKeys)
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj)
+      .sort()
+      .reduce((sorted, key) => {
+        sorted[key] = sortJsonKeys(obj[key])
+        return sorted
+      }, {})
+  }
+  return obj
+}
+
+// Normalize JSON text by parsing, sorting keys, and re-stringifying
+function normalizeJson(text) {
+  try {
+    const parsed = JSON.parse(text)
+    const sorted = sortJsonKeys(parsed)
+    return JSON.stringify(sorted, null, 2)
+  } catch {
+    return text // Return original if not valid JSON
+  }
+}
 
 export function DiffToolPage({ onBackHome }) {
   const [versions, setVersions] = useState([
-    { id: 1, title: 'Dev', text: '', included: true },
-    { id: 2, title: 'Staging', text: '', included: true },
-    { id: 3, title: 'Prod', text: '', included: true },
+    { id: 1, title: 'Text 1', text: '', included: true },
+    { id: 2, title: 'Text 2', text: '', included: true },
   ])
 
   const [masterIndex, setMasterIndex] = useState(null)
   const [showDiff, setShowDiff] = useState(false)
-  const [nextId, setNextId] = useState(4)
+  const [nextId, setNextId] = useState(3)
   const [highlightCommon, setHighlightCommon] = useState(true)
 
   const updateVersion = (index, updatedVersion) => {
@@ -33,7 +59,7 @@ export function DiffToolPage({ onBackHome }) {
   }
 
   const removeVersion = (index) => {
-    if (versions.length > 3) {
+    if (versions.length > 2) {
       const newVersions = versions.filter((_, i) => i !== index)
       setVersions(newVersions)
 
@@ -75,6 +101,14 @@ export function DiffToolPage({ onBackHome }) {
     })
   }
 
+  const sortAllJsonKeys = () => {
+    const sortedVersions = versions.map(version => ({
+      ...version,
+      text: normalizeJson(version.text)
+    }))
+    setVersions(sortedVersions)
+  }
+
   if (showDiff) {
     return (
       <DiffView
@@ -112,6 +146,13 @@ export function DiffToolPage({ onBackHome }) {
               <span>Highlight common lines</span>
             </label>
             <Button
+              onClick={sortAllJsonKeys}
+              className="bg-purple-500 hover:bg-purple-600 text-white font-semibold"
+            >
+              <ArrowUpAZ className="mr-2 h-4 w-4" />
+              Sort JSON Keys
+            </Button>
+            <Button
               onClick={copySelectedVersions}
               disabled={versions.filter(v => v.included).length === 0}
               className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
@@ -142,6 +183,7 @@ export function DiffToolPage({ onBackHome }) {
         </div>
 
         <div className={`grid gap-4 flex-1 overflow-hidden ${
+          versions.length === 2 ? 'grid-cols-2' :
           versions.length === 3 ? 'grid-cols-3' :
           versions.length === 4 ? 'grid-cols-4' :
           'grid-cols-5'
@@ -152,7 +194,7 @@ export function DiffToolPage({ onBackHome }) {
               version={version}
               onUpdate={(updated) => updateVersion(index, updated)}
               onRemove={() => removeVersion(index)}
-              canRemove={versions.length > 3}
+              canRemove={versions.length > 2}
               isMaster={index === masterIndex}
               onMasterChange={() => setMasterIndex(index === masterIndex ? null : index)}
               allVersions={versions}
