@@ -75,7 +75,7 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
   }
 
   const handleTagClick = (tag) => {
-    onInsertTag(tag.name)
+    onInsertTag(tag.name, tag.action)
     onClose()
   }
 
@@ -148,8 +148,13 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
                       {tag.name}
                     </div>
                     {tag.description && (
-                      <div className="text-gray-400 text-sm leading-relaxed line-clamp-3 group-hover:text-gray-300">
+                      <div className="text-gray-400 text-sm leading-relaxed line-clamp-2 group-hover:text-gray-300">
                         {tag.description}
+                      </div>
+                    )}
+                    {tag.action && (
+                      <div className="text-cyan-400/70 text-xs leading-relaxed mt-1 italic line-clamp-1">
+                        Action: {tag.action}
                       </div>
                     )}
                   </button>

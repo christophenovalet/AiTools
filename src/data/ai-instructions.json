@@ -1,7 +1,7 @@
 [
+  {"id":1766742000009,"name":"Paraphrase","description":"Restate the user's input concisely to confirm understanding before proceeding, do not code, wait for user agreement"},
   {"id":1,"name":"NO_CODE","description":"do not produce any code just answer the question"},
   {"id":1766735440944,"name":"Inspiration_guidance","description":"Use the provided visual reference only as high-level inspiration. Do not copy or replicate specific UI components, features, or interactions. All functional features must come exclusively from the specifications, not the image.\n\nDerive inspiration from the overall UX principles, layout structure, design language, and color palette, while producing an original implementation."},
   {"id":1766736261810,"name":"Frontend_Tech_stack","description":"React\nShadcn"},
-  {"id":1766737656225,"name":"Current_Code","description":"The feature is already implemented in the codebase and should not be re-developped"},
   {"id":1766739877499,"name":"AI_Agent_Glossary","description":"Current Code = The feature is already implemented in the codebase and should not be re-developped\nSee = Jump into that section\nAsk = The agent should wait for answers to all the Asks before starting its job\nDependency = This should be prensent or implemented before going further in the section"}
 ]

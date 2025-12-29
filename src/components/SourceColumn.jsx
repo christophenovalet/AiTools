@@ -1,12 +1,11 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef } from 'react'
 import { TextBlock } from './TextBlock'
 import { Trash2, Maximize2, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from './ui/button'
 import XmlEditor from './XmlEditor'
 
-export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onEditorFocus }) {
+export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, canRemove, selectedBlocks, onMaximize, isMaximized, onEditorFocus, blocksExpanded, onToggleBlocksExpanded }) {
   const editorRef = useRef(null)
-  const [blocksExpanded, setBlocksExpanded] = useState(false)
 
   const parseTextIntoBlocks = (text) => {
     if (!text.trim()) return []
@@ -78,7 +77,7 @@ export function SourceColumn({ column, onUpdateText, onToggleBlock, onRemove, ca
       {/* Blocks toggle bar */}
       {blocks.length > 0 && (
         <button
-          onClick={() => setBlocksExpanded(!blocksExpanded)}
+          onClick={() => onToggleBlocksExpanded && onToggleBlocksExpanded(column.id)}
           className="flex items-center justify-between px-3 py-2 border-t border-gray-700 bg-[#0a0a0a] hover:bg-[#1a1a1a] transition-colors flex-shrink-0 w-full text-left"
         >
           <span className="text-xs text-gray-500 font-semibold">

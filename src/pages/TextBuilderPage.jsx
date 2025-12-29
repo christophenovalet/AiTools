@@ -273,7 +273,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     })
   }
 
-  const insertTag = (tagName) => {
+  const insertTag = (tagName, action) => {
     if (!focusedTextareaRef?.current) return
 
     const editor = focusedTextareaRef.current
@@ -294,6 +294,9 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     const nextNewline = afterText.indexOf('\n')
     const isAtLineEnd = (nextNewline === -1 ? afterText : afterText.substring(0, nextNewline)).trim() === ''
 
+    // Build the action element if action is provided
+    const actionElement = action ? `\t<action>${action}</action>\n` : ''
+
     // Build the tag structure with proper formatting
     let newText
     let cursorOffset = null
@@ -301,13 +304,13 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     if (selectedText) {
       // Wrap selected text with indented tag structure
       const indentedContent = selectedText.split('\n').map(line => '\t' + line).join('\n')
-      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${actionElement}${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
     } else {
       // Insert empty tag structure with cursor positioned in indented area
       const prefix = isAtLineStart ? '' : '\n'
-      newText = `${prefix}<${tagName}>\n\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
-      // Position cursor after the tab (inside the tag)
-      cursorOffset = prefix.length + 1 + tagName.length + 1 + 1 + 1 // prefix + < + tagName + > + \n + \t
+      newText = `${prefix}<${tagName}>\n${actionElement}\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+      // Position cursor after the tab (inside the tag, after action if present)
+      cursorOffset = prefix.length + 1 + tagName.length + 1 + 1 + actionElement.length + 1 // prefix + < + tagName + > + \n + actionElement + \t
     }
 
     // Insert the new text using editor method

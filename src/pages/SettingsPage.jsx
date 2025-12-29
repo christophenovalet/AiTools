@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing } from '@/lib/claude-api'
 import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
+import factoryTags from '@/data/tags.json'
+import factoryInstructions from '@/data/ai-instructions.json'
 
 const API_KEY_STORAGE_KEY = 'claude-api-key'
+const TAGS_STORAGE_KEY = 'textbuilder-tags'
+const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 
 const MODEL_LABELS = {
   haiku: 'Haiku 4.5',
@@ -25,6 +29,7 @@ export function SettingsPage({ onBackHome }) {
   const [shortcutsSaved, setShortcutsSaved] = useState(false)
   const [recordingShortcut, setRecordingShortcut] = useState(null)
   const [shortcutConflict, setShortcutConflict] = useState(null)
+  const [tagsReset, setTagsReset] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem(API_KEY_STORAGE_KEY)
@@ -108,6 +113,31 @@ export function SettingsPage({ onBackHome }) {
     const defaults = resetShortcuts()
     setShortcuts(defaults)
     setShortcutConflict(null)
+  }
+
+  const handleResetTagsAndInstructions = () => {
+    // Get current tags and instructions from localStorage
+    const storedTags = localStorage.getItem(TAGS_STORAGE_KEY)
+    const storedInstructions = localStorage.getItem(AI_INSTRUCTIONS_STORAGE_KEY)
+
+    const currentTags = storedTags ? JSON.parse(storedTags) : []
+    const currentInstructions = storedInstructions ? JSON.parse(storedInstructions) : []
+
+    // Keep only custom tags (user-created)
+    const customTags = currentTags.filter(tag => tag.custom === true)
+    const customInstructions = currentInstructions.filter(inst => inst.custom === true)
+
+    // Merge factory tags with custom tags (factory first, then custom)
+    const mergedTags = [...factoryTags, ...customTags]
+    const mergedInstructions = [...factoryInstructions, ...customInstructions]
+
+    // Save to localStorage
+    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(mergedTags))
+    localStorage.setItem(AI_INSTRUCTIONS_STORAGE_KEY, JSON.stringify(mergedInstructions))
+
+    // Show success feedback
+    setTagsReset(true)
+    setTimeout(() => setTagsReset(false), 2000)
   }
 
   const startRecording = (shortcutId) => {
@@ -517,6 +547,51 @@ export function SettingsPage({ onBackHome }) {
             <p className="text-xs text-gray-500">
               Click on a shortcut to record a new key combination. Shortcuts require at least one modifier key (Ctrl, Alt, or Shift).
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Tags & Instructions Reset Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                <Tags className="w-5 h-5 text-cyan-500" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl text-gray-100">Tags & Instructions</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Reset to factory defaults while keeping your custom tags
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
+              <div className="text-sm text-gray-300 mb-3">
+                This will restore all factory tags and instructions while preserving any custom tags you've created.
+              </div>
+              <ul className="text-xs text-gray-500 space-y-1 mb-4">
+                <li>• Factory tags will be restored to their original state</li>
+                <li>• Your custom tags (marked with <span className="text-cyan-400">custom</span>) will be kept</li>
+                <li>• Any edits to factory tags will be lost</li>
+              </ul>
+              <Button
+                onClick={handleResetTagsAndInstructions}
+                className={`${tagsReset ? 'bg-green-600 hover:bg-green-600' : 'bg-cyan-600 hover:bg-cyan-500'} text-white`}
+              >
+                {tagsReset ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Reset Complete
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset Tags & Instructions
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

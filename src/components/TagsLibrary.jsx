@@ -20,7 +20,7 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
   const [isAddingInstruction, setIsAddingInstruction] = useState(false)
   const [editingTagId, setEditingTagId] = useState(null)
   const [editingInstructionId, setEditingInstructionId] = useState(null)
-  const [newTag, setNewTag] = useState({ name: '', description: '' })
+  const [newTag, setNewTag] = useState({ name: '', description: '', action: '' })
   const [newInstruction, setNewInstruction] = useState({ name: '', description: '' })
   const [tagFilter, setTagFilter] = useState('')
   const [instructionFilter, setInstructionFilter] = useState('')
@@ -54,9 +54,11 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
       setTags([...tags, {
         id: Date.now(),
         name: newTag.name.trim(),
-        description: newTag.description.trim()
+        description: newTag.description.trim(),
+        action: newTag.action.trim(),
+        custom: true
       }])
-      setNewTag({ name: '', description: '' })
+      setNewTag({ name: '', description: '', action: '' })
       setIsAddingTag(false)
     }
   }
@@ -66,16 +68,17 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
       setAiInstructions([...aiInstructions, {
         id: Date.now(),
         name: newInstruction.name.trim(),
-        description: newInstruction.description.trim()
+        description: newInstruction.description.trim(),
+        custom: true
       }])
       setNewInstruction({ name: '', description: '' })
       setIsAddingInstruction(false)
     }
   }
 
-  const handleEditTag = (id, name, description) => {
+  const handleEditTag = (id, name, description, action) => {
     setTags(tags.map(t =>
-      t.id === id ? { ...t, name: name.trim(), description: description.trim() } : t
+      t.id === id ? { ...t, name: name.trim(), description: description.trim(), action: (action || '').trim() } : t
     ))
     setEditingTagId(null)
   }
@@ -123,12 +126,22 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
               className="w-full bg-gray-800 text-gray-300 text-sm border border-gray-700 rounded px-2 py-1 outline-none focus:border-cyan-500 resize-none"
               rows={2}
             />
+            {!isInstruction && (
+              <input
+                type="text"
+                defaultValue={item.action || ''}
+                id={`edit-action-${item.id}`}
+                placeholder="Action (optional)"
+                className="w-full bg-gray-800 text-gray-300 text-sm border border-gray-700 rounded px-2 py-1 outline-none focus:border-cyan-500"
+              />
+            )}
             <div className="flex gap-2">
               <Button
                 onClick={() => {
                   const name = document.getElementById(`edit-name-${item.id}`).value
                   const desc = document.getElementById(`edit-desc-${item.id}`).value
-                  handleEdit(item.id, name, desc)
+                  const action = !isInstruction ? document.getElementById(`edit-action-${item.id}`).value : undefined
+                  handleEdit(item.id, name, desc, action)
                 }}
                 size="sm"
                 className={`flex-1 ${buttonColor} text-white`}
@@ -151,7 +164,7 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
             if (isInstruction) {
               onInsertInstruction && onInsertInstruction(item.name, item.description)
             } else {
-              onInsertTag && onInsertTag(item.name)
+              onInsertTag && onInsertTag(item.name, item.action)
             }
           }}>
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -188,6 +201,11 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
                 {item.description}
               </div>
             )}
+            {!isInstruction && item.action && (
+              <div className="text-cyan-400/70 text-[10px] leading-tight mt-1 italic">
+                Action: {item.action}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -218,6 +236,15 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
           className="w-full bg-gray-800 text-gray-300 text-sm border border-gray-700 rounded px-2 py-1 outline-none focus:border-cyan-500 resize-none"
           rows={2}
         />
+        {!isInstruction && (
+          <input
+            type="text"
+            value={newItem.action || ''}
+            onChange={(e) => setNewItem({ ...newItem, action: e.target.value })}
+            placeholder="Action (optional)..."
+            className="w-full bg-gray-800 text-gray-300 text-sm border border-gray-700 rounded px-2 py-1 outline-none focus:border-cyan-500"
+          />
+        )}
         <div className="flex gap-2">
           <Button
             onClick={handleAdd}
@@ -230,7 +257,7 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
           <Button
             onClick={() => {
               setIsAdding(false)
-              setNewItem({ name: '', description: '' })
+              setNewItem(isInstruction ? { name: '', description: '' } : { name: '', description: '', action: '' })
             }}
             size="sm"
             variant="ghost"
