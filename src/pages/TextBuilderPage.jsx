@@ -345,6 +345,36 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     editor.focus()
   }
 
+  const insertTemplate = (title, text) => {
+    if (!focusedTextareaRef?.current) return
+
+    const editor = focusedTextareaRef.current
+    const editorText = editor.getValue()
+    const selection = editor.getSelection()
+    const start = selection.start
+
+    // Check if we're at the start of a line
+    const beforeText = editorText.substring(0, start)
+    const lastNewline = beforeText.lastIndexOf('\n')
+    const lineStart = lastNewline === -1 ? 0 : lastNewline + 1
+    const isAtLineStart = beforeText.substring(lineStart).trim() === ''
+
+    // Check if we're at the end of a line
+    const afterText = editorText.substring(selection.end)
+    const nextNewline = afterText.indexOf('\n')
+    const isAtLineEnd = (nextNewline === -1 ? afterText : afterText.substring(0, nextNewline)).trim() === ''
+
+    // Convert title to tag name (remove spaces, use underscores)
+    const tagName = title.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')
+
+    // Build the template tag with text as content
+    const indentedText = text.split('\n').map(line => '\t' + line).join('\n')
+    const newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${indentedText}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
+
+    editor.replaceSelection(newText)
+    editor.focus()
+  }
+
   const handleEditorFocus = (editorRef) => {
     setFocusedTextareaRef(editorRef)
   }
@@ -499,10 +529,9 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
           {/* Prompt Tools - Left side */}
           <div className="h-full min-h-0 w-[280px] flex-shrink-0">
             <PromptTools
-              selectedBlocks={selectedBlocks}
-              onToggleBlock={toggleBlock}
               onInsertTag={insertTag}
               onInsertInstruction={insertInstruction}
+              onInsertTemplate={insertTemplate}
             />
           </div>
 

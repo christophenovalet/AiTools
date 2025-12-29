@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { TagsLibrary } from './TagsLibrary'
-import { PromptLibrary } from './PromptLibrary'
+import { TemplateLibrary } from './TemplateLibrary'
 import { Button } from './ui/button'
 
-export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag, onInsertInstruction }) {
-  const [activeTab, setActiveTab] = useState('tags') // 'tags' | 'prompts'
+export function PromptTools({ onInsertTag, onInsertInstruction, onInsertTemplate }) {
+  const [activeTab, setActiveTab] = useState('tags') // 'tags' | 'templates'
 
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-gray-700 overflow-hidden">
@@ -24,15 +24,15 @@ export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag, onInse
           )}
         </button>
         <button
-          onClick={() => setActiveTab('prompts')}
+          onClick={() => setActiveTab('templates')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'prompts'
+            activeTab === 'templates'
               ? 'text-purple-400 bg-[#1a1a1a]'
               : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
           }`}
         >
-          Prompts
-          {activeTab === 'prompts' && (
+          Templates
+          {activeTab === 'templates' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500" />
           )}
         </button>
@@ -46,9 +46,8 @@ export function PromptTools({ selectedBlocks, onToggleBlock, onInsertTag, onInse
             onInsertInstruction={onInsertInstruction}
           />
         ) : (
-          <PromptLibrary
-            selectedBlocks={selectedBlocks}
-            onToggleBlock={onToggleBlock}
+          <TemplateLibrary
+            onInsertTemplate={onInsertTemplate}
           />
         )}
       </div>

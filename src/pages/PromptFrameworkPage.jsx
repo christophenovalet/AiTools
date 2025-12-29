@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import promptsData from '@/data/prompts.json'
+import templatesData from '@/data/templates.json'
 import { Button } from '@/components/ui/button'
 import { Copy, Home, Filter } from 'lucide-react'
 
@@ -7,7 +7,7 @@ export function PromptFrameworkPage({ onBackHome }) {
   const [activeFilter, setActiveFilter] = useState('all') // all | template | framework | principle | tone
 
   const groups = useMemo(() => {
-    const grouped = promptsData.reduce((acc, p) => {
+    const grouped = templatesData.reduce((acc, p) => {
       const key = p.category || 'uncategorized'
       acc[key] = acc[key] || []
       acc[key].push(p)

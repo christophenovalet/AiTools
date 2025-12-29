@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags } from 'lucide-react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing } from '@/lib/claude-api'
 import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
 import factoryTags from '@/data/tags.json'
 import factoryInstructions from '@/data/ai-instructions.json'
+import factoryTemplates from '@/data/templates.json'
 
 const API_KEY_STORAGE_KEY = 'claude-api-key'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
+const TEMPLATES_STORAGE_KEY = 'textbuilder-templates'
 
 const MODEL_LABELS = {
   haiku: 'Haiku 4.5',
@@ -30,6 +32,7 @@ export function SettingsPage({ onBackHome }) {
   const [recordingShortcut, setRecordingShortcut] = useState(null)
   const [shortcutConflict, setShortcutConflict] = useState(null)
   const [tagsReset, setTagsReset] = useState(false)
+  const [templatesReset, setTemplatesReset] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem(API_KEY_STORAGE_KEY)
@@ -138,6 +141,25 @@ export function SettingsPage({ onBackHome }) {
     // Show success feedback
     setTagsReset(true)
     setTimeout(() => setTagsReset(false), 2000)
+  }
+
+  const handleResetTemplates = () => {
+    // Get current templates from localStorage
+    const storedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY)
+    const currentTemplates = storedTemplates ? JSON.parse(storedTemplates) : []
+
+    // Keep only custom templates (user-created)
+    const customTemplates = currentTemplates.filter(t => t.custom === true)
+
+    // Merge factory templates with custom templates (factory first, then custom)
+    const mergedTemplates = [...factoryTemplates, ...customTemplates]
+
+    // Save to localStorage
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(mergedTemplates))
+
+    // Show success feedback
+    setTemplatesReset(true)
+    setTimeout(() => setTemplatesReset(false), 2000)
   }
 
   const startRecording = (shortcutId) => {
@@ -588,6 +610,51 @@ export function SettingsPage({ onBackHome }) {
                   <>
                     <RotateCcw className="w-4 h-4 mr-2" />
                     Reset Tags & Instructions
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Prompt Templates Reset Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-purple-500" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl text-gray-100">Prompt Templates</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Reset to factory defaults while keeping your custom templates
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
+              <div className="text-sm text-gray-300 mb-3">
+                This will restore all factory prompt templates while preserving any custom templates you've created.
+              </div>
+              <ul className="text-xs text-gray-500 space-y-1 mb-4">
+                <li>• Factory templates will be restored to their original state</li>
+                <li>• Your custom templates (marked with <span className="text-purple-400">custom</span>) will be kept</li>
+                <li>• Any edits to factory templates will be lost</li>
+              </ul>
+              <Button
+                onClick={handleResetTemplates}
+                className={`${templatesReset ? 'bg-green-600 hover:bg-green-600' : 'bg-purple-600 hover:bg-purple-500'} text-white`}
+              >
+                {templatesReset ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Reset Complete
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset Prompt Templates
                   </>
                 )}
               </Button>
