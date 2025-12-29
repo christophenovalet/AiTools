@@ -10,5 +10,8 @@
   {"id":1766742100004,"name":"Improve","description":"Please improve the clarity and flow of the above content while maintaining the core message."},
   {"id":1766742100015,"name":"DRY","description":"Don't repeat yourself: eliminate redundancy and avoid repeating ideas or sentences."},
   {"id":1766742100016,"name":"FACTUAL","description":"Be factual: base your answer only on verifiable facts from the provided content; avoid speculation."},
-  {"id":1766742100017,"name":"KISS","description":"Keep it simple: use concise, straightforward language and avoid unnecessary complexity."}
+  {"id":1766742100017,"name":"KISS","description":"Keep it simple: use concise, straightforward language and avoid unnecessary complexity."},
+  {"id":1766742100018,"name":"ASCII_Mockup","description":"You are a top UX designer, you create minimalist designs, you will create a ascii mockup for this"},
+  {"id":1766742100019,"name":"LIST_ONLY","description":"Output must be a single list with one item per line, no bullet points, no numbering, no additional text, explanations, preamble, or commentary"},
+  {"id":1766742100020,"name":"Verify_answer","description":"Verify your answer using the latest information or documentation available on the web before responding. Search for current best practices, API changes, and updated specifications."}
 ]

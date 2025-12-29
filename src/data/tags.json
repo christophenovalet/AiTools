@@ -48,5 +48,10 @@
   {"id":1766742000014,"name":"variants","description":"Alternative paths, optional configurations, conditional behaviors"},
   {"id":1766742000015,"name":"assumptions","description":"Implicit business or technical assumptions"},
   {"id":1766742000016,"name":"story","description":"Short summary of the business need or problem being solved"},
-  {"id":1766742000017,"name":"notes","description":"Additional comments, dependencies, or TODOs"}
+  {"id":1766742000017,"name":"notes","description":"Additional comments, dependencies, or TODOs"},
+  {"id":1766742000018,"name":"error","description":"Known errors, bugs, issues, or problematic behavior that needs to be fixed or addressed"},
+  {"id":1766742000019,"name":"payload","description":"Data structure or message content sent to Chrome extension, browser APIs, or between components"},
+  {"id":1766742000020,"name":"debug_data","description":"Debugging information, logs, trace data, or diagnostic details"},
+  {"id":1766742000021,"name":"test_case","description":"Specific test scenario with inputs, expected outputs, and pass/fail criteria"},
+  {"id":1766742000022,"name":"mandatory","description":"Required elements, non-negotiable features, or must-have functionality that cannot be omitted"}
 ]
