@@ -4,6 +4,15 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/api/anthropic-admin': {
+        target: 'https://api.anthropic.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/anthropic-admin/, ''),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

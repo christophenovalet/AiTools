@@ -43,6 +43,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
   const [chatbotInput, setChatbotInput] = useState('')
+  const [chatbotContextAddition, setChatbotContextAddition] = useState('')
   const [clearChatOnOpen, setClearChatOnOpen] = useState(false)
   const [selectionToolbar, setSelectionToolbar] = useState({
     visible: false,
@@ -162,8 +163,9 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   }, [selectionToolbar.visible])
 
   // Handle toolbar action - clears conversation and opens with new prompt
-  const handleToolbarAction = useCallback((formattedPrompt) => {
+  const handleToolbarAction = useCallback((formattedPrompt, contextAddition = '') => {
     setChatbotInput(formattedPrompt)
+    setChatbotContextAddition(contextAddition)
     setClearChatOnOpen(true)
     setIsChatbotOpen(true)
     setSelectionToolbar({ visible: false, position: null, text: '' })
@@ -730,6 +732,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         onClose={() => setIsChatbotOpen(false)}
         initialInput={chatbotInput}
         onInputChange={setChatbotInput}
+        initialContextAddition={chatbotContextAddition}
+        onContextAdditionHandled={() => setChatbotContextAddition('')}
         onOpenSettings={onOpenSettings}
         onBranch={handleCreateBranch}
         clearOnOpen={clearChatOnOpen}

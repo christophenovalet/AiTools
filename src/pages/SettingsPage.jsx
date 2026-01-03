@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText } from 'lucide-react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText, Shield, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing } from '@/lib/claude-api'
+import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing, getAdminApiKey, saveAdminApiKey } from '@/lib/claude-api'
 import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
 import factoryTags from '@/data/tags.json'
 import factoryInstructions from '@/data/ai-instructions.json'
@@ -19,10 +19,13 @@ const MODEL_LABELS = {
   opus: 'Opus 4.5'
 }
 
-export function SettingsPage({ onBackHome }) {
+export function SettingsPage({ onBackHome, onOpenCosts }) {
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [adminApiKey, setAdminApiKey] = useState('')
+  const [showAdminKey, setShowAdminKey] = useState(false)
+  const [adminSaved, setAdminSaved] = useState(false)
   const [menuItems, setMenuItems] = useState([])
   const [menuItemsSaved, setMenuItemsSaved] = useState(false)
   const [modelPricing, setModelPricing] = useState({})
@@ -39,6 +42,7 @@ export function SettingsPage({ onBackHome }) {
     if (stored) {
       setApiKey(stored)
     }
+    setAdminApiKey(getAdminApiKey())
     setMenuItems(getMenuItems())
     setModelPricing(getModelPricing())
     setShortcuts(getShortcuts())
@@ -53,6 +57,18 @@ export function SettingsPage({ onBackHome }) {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       handleSave()
+    }
+  }
+
+  const handleSaveAdminKey = () => {
+    saveAdminApiKey(adminApiKey)
+    setAdminSaved(true)
+    setTimeout(() => setAdminSaved(false), 2000)
+  }
+
+  const handleAdminKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSaveAdminKey()
     }
   }
 
@@ -300,6 +316,84 @@ export function SettingsPage({ onBackHome }) {
                 className="text-amber-500 hover:text-amber-400 underline"
               >
                 console.anthropic.com
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Admin API Key Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-gray-100">Admin API Key</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Required for viewing organization cost reports
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <input
+                type={showAdminKey ? 'text' : 'password'}
+                value={adminApiKey}
+                onChange={(e) => setAdminApiKey(e.target.value)}
+                onKeyDown={handleAdminKeyDown}
+                placeholder="sk-ant-admin01-..."
+                className="w-full bg-[#0a0a0a] border border-[#333333] rounded-lg px-4 py-3 pr-12 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAdminKey(!showAdminKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+              >
+                {showAdminKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleSaveAdminKey}
+                disabled={!adminApiKey.trim()}
+                className={`${adminSaved ? 'bg-green-600 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-500'} text-white`}
+              >
+                {adminSaved ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Admin Key
+                  </>
+                )}
+              </Button>
+              {adminApiKey.trim() && (
+                <Button
+                  onClick={onOpenCosts}
+                  variant="ghost"
+                  className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  View Cost Report
+                </Button>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Admin API keys are separate from regular API keys. Get yours from{' '}
+              <a
+                href="https://console.anthropic.com/settings/admin-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-400 underline"
+              >
+                console.anthropic.com/settings/admin-keys
               </a>
             </p>
           </CardContent>

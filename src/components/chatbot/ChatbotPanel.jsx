@@ -29,6 +29,9 @@ export function ChatbotPanel({
   onClose,
   initialInput = '',
   onInputChange,
+  // Context addition from AI tools (for caching large reference data)
+  initialContextAddition = '',
+  onContextAdditionHandled,
   onOpenSettings,
   // Branch-related props
   isBranch = false,
@@ -66,7 +69,7 @@ export function ChatbotPanel({
   const [context, setContext] = useState(() => {
     return localStorage.getItem('chatbot-context') || ''
   })
-  const [totalUsage, setTotalUsage] = useState({ inputTokens: 0, outputTokens: 0 })
+  const [totalUsage, setTotalUsage] = useState({ inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 })
   const [currentModel, setCurrentModel] = useState(() => {
     const stored = localStorage.getItem('chatbot-model')
     return stored && MODEL_ORDER.includes(stored) ? stored : getDefaultModel()
@@ -120,11 +123,25 @@ export function ChatbotPanel({
     if (clearOnOpen && isOpen) {
       setMessages([])
       setEditingMessageId(null)
-      setTotalUsage({ inputTokens: 0, outputTokens: 0 })
+      setTotalUsage({ inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 })
       localStorage.removeItem('chatbot-messages')
       onClearOnOpenHandled?.()
     }
   }, [clearOnOpen, isOpen, onClearOnOpenHandled])
+
+  // Handle context addition from AI tools (prepend to context for caching)
+  useEffect(() => {
+    if (initialContextAddition && isOpen) {
+      setContext(prev => {
+        // Prepend the new context addition (it will be cached)
+        const newContext = prev
+          ? `${initialContextAddition}\n\n${prev}`
+          : initialContextAddition
+        return newContext
+      })
+      onContextAdditionHandled?.()
+    }
+  }, [initialContextAddition, isOpen, onContextAdditionHandled])
 
   // Initialize position on first open - always right side, full height
   // Branch panels are offset to the left of the main panel
@@ -286,6 +303,12 @@ export function ChatbotPanel({
     setAttachments(prev => prev.filter(a => a.id !== id))
   }, [])
 
+  const handleUpdateAttachment = useCallback((id, updates) => {
+    setAttachments(prev => prev.map(a =>
+      a.id === id ? { ...a, ...updates } : a
+    ))
+  }, [])
+
   const handleSend = useCallback(async () => {
     if ((!input.trim() && attachments.length === 0) || isStreaming) return
 
@@ -398,10 +421,12 @@ export function ChatbotPanel({
       currentModel,
       context,
       (usage) => {
-        // Update total usage
+        // Update total usage including cache metrics
         setTotalUsage(prev => ({
           inputTokens: prev.inputTokens + (usage.input_tokens || 0),
-          outputTokens: prev.outputTokens + (usage.output_tokens || 0)
+          outputTokens: prev.outputTokens + (usage.output_tokens || 0),
+          cacheCreationTokens: prev.cacheCreationTokens + (usage.cache_creation_input_tokens || 0),
+          cacheReadTokens: prev.cacheReadTokens + (usage.cache_read_input_tokens || 0)
         }))
       },
       abortControllerRef.current?.signal
@@ -420,7 +445,7 @@ export function ChatbotPanel({
   const clearMessages = () => {
     setMessages([])
     setEditingMessageId(null)
-    setTotalUsage({ inputTokens: 0, outputTokens: 0 })
+    setTotalUsage({ inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 })
     localStorage.removeItem('chatbot-messages')
   }
 
@@ -625,6 +650,7 @@ export function ChatbotPanel({
             attachments={attachments}
             onAddAttachment={handleAddAttachment}
             onRemoveAttachment={handleRemoveAttachment}
+            onUpdateAttachment={handleUpdateAttachment}
             context={context}
             onContextChange={setContext}
           />
@@ -633,13 +659,18 @@ export function ChatbotPanel({
           <div className="px-3 py-1.5 border-t border-gray-700/50 bg-gray-900/30 flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center gap-3">
               {(totalUsage.inputTokens > 0 || totalUsage.outputTokens > 0) && (
-                <span title={`Input: ${totalUsage.inputTokens.toLocaleString()} | Output: ${totalUsage.outputTokens.toLocaleString()}`}>
+                <span title={`Input: ${totalUsage.inputTokens.toLocaleString()} | Output: ${totalUsage.outputTokens.toLocaleString()}${totalUsage.cacheReadTokens > 0 ? ` | Cache read: ${totalUsage.cacheReadTokens.toLocaleString()}` : ''}${totalUsage.cacheCreationTokens > 0 ? ` | Cache write: ${totalUsage.cacheCreationTokens.toLocaleString()}` : ''}`}>
                   Cost: ${calculateCost(totalUsage.inputTokens, totalUsage.outputTokens, currentModel).toFixed(4)}
                 </span>
               )}
               {(totalUsage.inputTokens > 0 || totalUsage.outputTokens > 0) && (
                 <span className="text-gray-600">
                   {(totalUsage.inputTokens + totalUsage.outputTokens).toLocaleString()} tokens
+                </span>
+              )}
+              {totalUsage.cacheReadTokens > 0 && (
+                <span className="text-green-500" title={`${totalUsage.cacheReadTokens.toLocaleString()} tokens read from cache (90% savings)`}>
+                  ⚡ cached
                 </span>
               )}
             </div>

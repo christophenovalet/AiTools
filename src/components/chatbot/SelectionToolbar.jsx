@@ -13,8 +13,8 @@ export const SelectionToolbar = forwardRef(function SelectionToolbar({ position,
   }))
 
   const handleClick = (item) => {
-    const formattedPrompt = formatTemplate(item.template, selectedText)
-    onAction(formattedPrompt)
+    const { prompt, contextAddition } = formatTemplate(item.template, selectedText)
+    onAction(prompt, contextAddition)
   }
 
   const getIcon = (id) => {

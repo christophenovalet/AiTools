@@ -11,7 +11,21 @@
       "Bash(netlify deploy:*)",
       "Bash(npm install:*)",
       "Bash(netlify sites:list:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git restore:*)",
+      "Bash(code \"C:\\\\WORKSPACE\\\\AITOOLS\\\\AiTools\\\\src\\\\data\\\\tags.json\")",
+      "Bash(notepad \"C:\\\\WORKSPACE\\\\AITOOLS\\\\AiTools\\\\src\\\\data\\\\tags.json\")",
+      "Bash(notepad \"C:\\\\WORKSPACE\\\\AITOOLS\\\\AiTools\\\\src\\\\data\\\\ai-instructions.json\")",
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:spring.io)",
+      "WebFetch(domain:markerjs.com)",
+      "WebFetch(domain:v2.markerjs.com)",
+      "Bash(npx shadcn@latest:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

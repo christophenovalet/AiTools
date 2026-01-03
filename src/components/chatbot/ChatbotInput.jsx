@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Send, Square, X, Pencil, Paperclip, FileText, FileCode } from 'lucide-react'
+import { ImageAnnotator } from './ImageAnnotator'
 
 const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const SUPPORTED_DOC_TYPES = ['application/pdf']
@@ -16,6 +17,7 @@ export function ChatbotInput({
   attachments = [],
   onAddAttachment,
   onRemoveAttachment,
+  onUpdateAttachment,
   context = '',
   onContextChange
 }) {
@@ -23,6 +25,7 @@ export function ChatbotInput({
   const fileInputRef = useRef(null)
   const [isContextOpen, setIsContextOpen] = useState(false)
   const contextTextareaRef = useRef(null)
+  const [annotatingAttachment, setAnnotatingAttachment] = useState(null)
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -110,6 +113,22 @@ export function ChatbotInput({
     }
   }
 
+  const handleImageClick = useCallback((attachment) => {
+    if (attachment.type === 'image') {
+      setAnnotatingAttachment(attachment)
+    }
+  }, [])
+
+  const handleAnnotationSave = useCallback(({ data, preview }) => {
+    if (annotatingAttachment) {
+      onUpdateAttachment?.(annotatingAttachment.id, {
+        data,
+        preview
+      })
+    }
+    setAnnotatingAttachment(null)
+  }, [annotatingAttachment, onUpdateAttachment])
+
   const canSend = (value.trim() || attachments.length > 0) && !isStreaming
 
   return (
@@ -162,11 +181,22 @@ export function ChatbotInput({
               className="relative group bg-gray-800 rounded-lg border border-gray-600 overflow-hidden"
             >
               {att.type === 'image' && att.preview ? (
-                <img
-                  src={att.preview}
-                  alt={att.name}
-                  className="w-16 h-16 object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => handleImageClick(att)}
+                  className="relative w-16 h-16 cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                  title="Click to annotate image"
+                >
+                  <img
+                    src={att.preview}
+                    alt={att.name}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Annotation hint overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Pencil className="w-5 h-5 text-white" />
+                  </div>
+                </button>
               ) : (
                 <div className="w-16 h-16 flex flex-col items-center justify-center p-1">
                   <FileText className="w-6 h-6 text-red-400" />
@@ -177,7 +207,7 @@ export function ChatbotInput({
               )}
               <button
                 onClick={() => onRemoveAttachment?.(att.id)}
-                className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
               >
                 <X className="w-3 h-3 text-white" />
               </button>
@@ -277,6 +307,15 @@ export function ChatbotInput({
           ? 'Press Enter to resend, Escape to cancel'
           : 'Enter to send, Shift+Enter for new line, paste or attach images/PDFs'}
       </div>
+
+      {/* Image Annotator Dialog */}
+      <ImageAnnotator
+        isOpen={!!annotatingAttachment}
+        onClose={() => setAnnotatingAttachment(null)}
+        imageData={annotatingAttachment?.preview}
+        imageName={annotatingAttachment?.name}
+        onSave={handleAnnotationSave}
+      />
     </div>
   )
 }

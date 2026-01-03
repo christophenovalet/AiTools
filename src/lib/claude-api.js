@@ -3,7 +3,12 @@ import defaultTags from '@/data/tags.json'
 import defaultAiInstructions from '@/data/ai-instructions.json'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
+// Use proxy in development to avoid CORS issues with Admin API
+const COST_REPORT_URL = import.meta.env.DEV
+  ? '/api/anthropic-admin/v1/organizations/cost_report'
+  : 'https://api.anthropic.com/v1/organizations/cost_report'
 const API_KEY_STORAGE_KEY = 'claude-api-key'
+const ADMIN_API_KEY_STORAGE_KEY = 'claude-admin-api-key'
 const TAGS_STORAGE_KEY = 'textbuilder-tags'
 const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 const MENU_ITEMS_STORAGE_KEY = 'textbuilder-menu-items'
@@ -14,6 +19,33 @@ const DEFAULT_MODEL_PRICING = {
   haiku: { input: 1.00, output: 5.00 },
   sonnet: { input: 3.00, output: 15.00 },
   opus: { input: 5.00, output: 25.00 }
+}
+
+// Minimum tokens required for caching by model family
+const CACHE_MIN_TOKENS = {
+  haiku: 2048,   // Haiku 3.5/3 requires 2048, Haiku 4.5 requires 4096
+  sonnet: 1024,
+  opus: 1024
+}
+
+// Estimate token count from text (~4 chars per token is a reasonable approximation)
+function estimateTokens(text) {
+  if (!text) return 0
+  return Math.ceil(text.length / 4)
+}
+
+// Calculate total tokens in conversation history
+function estimateConversationTokens(messages, context = '') {
+  let total = estimateTokens(context)
+  for (const msg of messages) {
+    if (typeof msg.content === 'string') {
+      total += estimateTokens(msg.content)
+    } else if (msg.content) {
+      // Handle content arrays (with attachments)
+      total += estimateTokens(JSON.stringify(msg.content))
+    }
+  }
+  return total
 }
 
 export function getApiKey() {
@@ -39,7 +71,7 @@ function buildTools() {
   return tools
 }
 
-function buildMessageContent(message) {
+function buildMessageContent(message, addCacheControl = false) {
   // If message has attachments, build content array
   if (message.attachments && message.attachments.length > 0) {
     const content = []
@@ -66,18 +98,35 @@ function buildMessageContent(message) {
       }
     }
 
-    // Add text content if present
+    // Add text content if present (with optional cache control on last block)
     if (message.content && message.content.trim()) {
-      content.push({
+      const textBlock = {
         type: 'text',
         text: message.content
-      })
+      }
+      if (addCacheControl) {
+        textBlock.cache_control = { type: 'ephemeral' }
+      }
+      content.push(textBlock)
+    } else if (addCacheControl && content.length > 0) {
+      // Add cache_control to last attachment if no text
+      content[content.length - 1].cache_control = { type: 'ephemeral' }
     }
 
     return content
   }
 
-  // Plain text message
+  // Plain text message - convert to content block if caching needed
+  if (addCacheControl) {
+    return [
+      {
+        type: 'text',
+        text: message.content,
+        cache_control: { type: 'ephemeral' }
+      }
+    ]
+  }
+
   return message.content
 }
 
@@ -96,15 +145,31 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
   const model = selectedModel?.id || models[defaultModel].id
   const tools = buildTools()
 
+  // Determine cache threshold based on model
+  const modelFamily = modelKey || defaultModel
+  const cacheMinTokens = CACHE_MIN_TOKENS[modelFamily] || 1024
+
+  // Calculate if conversation is large enough for caching
+  const conversationTokens = estimateConversationTokens(messages, context)
+  const shouldCacheConversation = conversationTokens >= cacheMinTokens
+
+  // Find the index of the last user message for cache breakpoint
+  const lastUserMessageIndex = messages.map(m => m.role).lastIndexOf('user')
+
   try {
     const requestBody = {
       model,
       max_tokens: maxTokens,
       stream: true,
-      messages: messages.map(m => ({
-        role: m.role,
-        content: buildMessageContent(m)
-      }))
+      messages: messages.map((m, index) => {
+        // Add cache_control to the last user message if threshold met
+        const isLastUserMessage = index === lastUserMessageIndex && m.role === 'user'
+        const addCache = shouldCacheConversation && isLastUserMessage
+        return {
+          role: m.role,
+          content: buildMessageContent(m, addCache)
+        }
+      })
     }
 
     // Add system message with context if provided
@@ -151,7 +216,12 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
     let buffer = ''
     let currentContentBlock = null
     let searchResults = []
-    let usage = { input_tokens: 0, output_tokens: 0 }
+    let usage = {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0
+    }
 
     while (true) {
       const { done, value } = await reader.read()
@@ -219,9 +289,11 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
               usage.output_tokens = parsed.usage.output_tokens || 0
             }
 
-            // Capture input tokens from message_start
+            // Capture input tokens and cache metrics from message_start
             if (parsed.type === 'message_start' && parsed.message?.usage) {
               usage.input_tokens = parsed.message.usage.input_tokens || 0
+              usage.cache_creation_input_tokens = parsed.message.usage.cache_creation_input_tokens || 0
+              usage.cache_read_input_tokens = parsed.message.usage.cache_read_input_tokens || 0
             }
 
             if (parsed.type === 'message_stop') {
@@ -312,11 +384,66 @@ function getTagsAndInstructions() {
 
 export function formatTemplate(template, selectedText) {
   let result = template.replace('{selected_text}', selectedText)
+  let contextAddition = ''
 
+  // Extract {tags_json} to context for caching instead of embedding in prompt
   if (template.includes('{tags_json}')) {
     const tagsData = getTagsAndInstructions()
-    result = result.replace('{tags_json}', JSON.stringify(tagsData, null, 2))
+    const tagsJson = JSON.stringify(tagsData, null, 2)
+    // Remove the tags_json placeholder and its surrounding tag from the prompt
+    result = result.replace(/<tags_and_instructions_reference>\s*\{tags_json\}\s*<\/tags_and_instructions_reference>/s, '<tags_and_instructions_reference>\nSee context\n</tags_and_instructions_reference>')
+    // Also handle if it's used without the wrapper tag
+    result = result.replace('{tags_json}', 'See context for tags and instructions reference')
+    // Add to context for caching
+    contextAddition = `<tags_and_instructions_reference>\n${tagsJson}\n</tags_and_instructions_reference>`
   }
 
-  return result
+  return { prompt: result, contextAddition }
+}
+
+// Admin API Key functions
+export function getAdminApiKey() {
+  return localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) || ''
+}
+
+export function hasAdminApiKey() {
+  const key = getAdminApiKey()
+  return key && key.trim().length > 0
+}
+
+export function saveAdminApiKey(key) {
+  localStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, key.trim())
+}
+
+// Cost Report API
+export async function fetchCostReport(startingAt, endingAt = null) {
+  const adminKey = getAdminApiKey()
+  if (!adminKey) {
+    throw new Error('Admin API key is required')
+  }
+
+  const params = new URLSearchParams({
+    starting_at: startingAt,
+    bucket_width: '1d',
+    'group_by[]': 'description'
+  })
+
+  if (endingAt) {
+    params.append('ending_at', endingAt)
+  }
+
+  const response = await fetch(`${COST_REPORT_URL}?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'x-api-key': adminKey,
+      'anthropic-version': '2023-06-01'
+    }
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`API error: ${response.status} - ${errorText}`)
+  }
+
+  return response.json()
 }
