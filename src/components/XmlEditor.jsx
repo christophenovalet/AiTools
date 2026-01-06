@@ -5,45 +5,57 @@ import { foldAll, unfoldAll } from '@codemirror/language'
 import { Button } from './ui/button'
 import { WrapText, ChevronsDownUp, ChevronsUpDown, Copy } from 'lucide-react'
 
-// XML formatting function
+// XML formatting function - preserves content structure while fixing indentation
 export function formatXml(xmlString) {
   if (!xmlString.trim()) return xmlString
 
-  let formatted = ''
-  let indent = 0
-  const tab = '\t'
+  try {
+    let formatted = ''
+    let indent = 0
+    const tab = '\t'
 
-  // Split by tags while keeping the tags
-  const parts = xmlString.replace(/>\s*</g, '><').split(/(<[^>]+>)/g).filter(Boolean)
+    // Normalize line endings and split into lines
+    const lines = xmlString.replace(/\r\n/g, '\n').split('\n')
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i].trim()
-    if (!part) continue
-
-    if (part.startsWith('</')) {
-      // Closing tag - decrease indent first
-      indent = Math.max(0, indent - 1)
-      formatted += tab.repeat(indent) + part + '\n'
-    } else if (part.startsWith('<') && part.endsWith('/>')) {
-      // Self-closing tag
-      formatted += tab.repeat(indent) + part + '\n'
-    } else if (part.startsWith('<')) {
-      // Opening tag
-      formatted += tab.repeat(indent) + part + '\n'
-      // Only increase indent if it's not a self-closing tag and not a special tag
-      if (!part.includes('</') && !part.startsWith('<?') && !part.startsWith('<!')) {
-        indent++
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line) {
+        // Preserve empty lines
+        formatted += '\n'
+        continue
       }
-    } else {
-      // Text content
-      const trimmed = part.trim()
-      if (trimmed) {
-        formatted += tab.repeat(indent) + trimmed + '\n'
+
+      // Check if line is a closing tag
+      const isClosingTag = /^<\/[^>]+>$/.test(line)
+      // Check if line is an opening tag (not self-closing, not closing)
+      const isOpeningTag = /^<[^\/!?][^>]*[^\/]>$/.test(line) || /^<[a-zA-Z]>$/.test(line)
+      // Check if line is self-closing
+      const isSelfClosing = /^<[^>]+\/>$/.test(line)
+      // Check if line is a complete element (opening + content + closing on same line)
+      const isCompleteElement = /^<([a-zA-Z_][a-zA-Z0-9_-]*)(?:\s[^>]*)?>.*<\/\1>$/.test(line)
+      // Check if line is just text content
+      const isTextContent = !line.startsWith('<')
+
+      if (isClosingTag) {
+        indent = Math.max(0, indent - 1)
+        formatted += tab.repeat(indent) + line + '\n'
+      } else if (isCompleteElement || isSelfClosing) {
+        formatted += tab.repeat(indent) + line + '\n'
+      } else if (isOpeningTag) {
+        formatted += tab.repeat(indent) + line + '\n'
+        indent++
+      } else if (isTextContent) {
+        formatted += tab.repeat(indent) + line + '\n'
+      } else {
+        // Mixed or other content
+        formatted += tab.repeat(indent) + line + '\n'
       }
     }
-  }
 
-  return formatted.trim()
+    return formatted.trim()
+  } catch (e) {
+    return xmlString
+  }
 }
 
 const XmlEditor = forwardRef(function XmlEditor({

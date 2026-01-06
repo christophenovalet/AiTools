@@ -313,11 +313,10 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
       const indentedContent = selectedText.split('\n').map(line => '\t' + line).join('\n')
       newText = `${isAtLineStart ? '' : '\n'}<${tagName}>\n${actionElement}${indentedContent}\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
     } else {
-      // Insert empty tag structure with cursor positioned in indented area
-      const prefix = isAtLineStart ? '' : '\n'
-      newText = `${prefix}<${tagName}>\n${actionElement}\t\n</${tagName}>${isAtLineEnd ? '' : '\n'}`
-      // Position cursor after the tab (inside the tag, after action if present)
-      cursorOffset = prefix.length + 1 + tagName.length + 1 + 1 + actionElement.length + 1 // prefix + < + tagName + > + \n + actionElement + \t
+      // Insert inline tag with cursor positioned inside (no line feeds)
+      newText = `<${tagName}></${tagName}>`
+      // Position cursor after the opening tag: < + tagName + >
+      cursorOffset = 1 + tagName.length + 1
     }
 
     // Insert the new text using editor method
