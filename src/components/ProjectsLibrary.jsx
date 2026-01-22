@@ -42,6 +42,25 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
   }, [projects])
 
+  // Reload projects when sync completes (from another device)
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      console.log('Sync complete, reloading projects...')
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          setProjects(parsed)
+        } catch (e) {
+          console.error('Failed to parse projects after sync:', e)
+        }
+      }
+    }
+
+    window.addEventListener('sync-complete', handleSyncComplete)
+    return () => window.removeEventListener('sync-complete', handleSyncComplete)
+  }, [])
+
   // Get active project
   const activeProject = (projects || []).find(p => p.id === activeProjectId)
 

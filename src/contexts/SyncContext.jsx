@@ -57,6 +57,21 @@ export function SyncProvider({ children }) {
 
       setSyncManager(manager);
 
+      // Auto-sync on startup if migration is complete
+      const migrationComplete = localStorage.getItem('sync_migration_complete');
+      if (migrationComplete && navigator.onLine) {
+        console.log('Auto-syncing from cloud on startup...');
+        manager.performInitialSync()
+          .then(() => {
+            console.log('Startup sync complete');
+            // Dispatch event so components can refresh their data
+            window.dispatchEvent(new CustomEvent('sync-complete'));
+          })
+          .catch(err => {
+            console.error('Startup sync failed:', err);
+          });
+      }
+
       // Cleanup on unmount or user change
       return () => {
         console.log('Cleaning up sync manager');
