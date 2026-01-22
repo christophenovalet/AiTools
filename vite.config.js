@@ -5,6 +5,8 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5174,
+    strictPort: true,
     proxy: {
       '/api/anthropic-admin': {
         target: 'https://api.anthropic.com',

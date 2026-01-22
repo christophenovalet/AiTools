@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText, Shield, BarChart3 } from 'lucide-react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText, Shield, BarChart3, Cloud, User, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing, getAdminApiKey, saveAdminApiKey } from '@/lib/claude-api'
+import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing, getAdminApiKey, saveAdminApiKey, saveApiKey } from '@/lib/claude-api'
 import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
+import { useAuth } from '@/contexts/AuthContext'
+import { useSyncManager } from '@/contexts/SyncContext'
 import factoryTags from '@/data/tags.json'
 import factoryInstructions from '@/data/ai-instructions.json'
 import factoryTemplates from '@/data/templates.json'
@@ -20,6 +22,10 @@ const MODEL_LABELS = {
 }
 
 export function SettingsPage({ onBackHome, onOpenCosts }) {
+  // Auth and Sync hooks
+  const { user, signOut } = useAuth()
+  const { syncManager, syncState } = useSyncManager()
+
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -48,8 +54,9 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
     setShortcuts(getShortcuts())
   }, [])
 
-  const handleSave = () => {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey.trim())
+  const handleSave = async () => {
+    // Use the async version that handles encryption and sync
+    await saveApiKey(apiKey.trim())
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -251,6 +258,107 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
           </Button>
           <h1 className="text-3xl font-bold text-gray-100">Settings</h1>
         </div>
+
+        {/* Account & Sync Card */}
+        <Card className="bg-[#1a1a1a] border-[#333333]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <User className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-gray-100">Account & Sync</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Manage your account and cloud synchronization
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* User Info */}
+            {user && (
+              <div className="flex items-center gap-4 p-4 bg-gray-800/50 rounded-lg">
+                {user.picture && (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    className="w-12 h-12 rounded-full"
+                  />
+                )}
+                <div className="flex-1">
+                  <p className="font-medium text-gray-100">{user.name}</p>
+                  <p className="text-sm text-gray-400">{user.email}</p>
+                </div>
+                <Button
+                  onClick={signOut}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            )}
+
+            {/* Sync Status */}
+            {syncManager && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-100">Sync Status</h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {syncState.status === 'synced' && 'All changes synced to cloud'}
+                      {syncState.status === 'syncing' && 'Syncing your data...'}
+                      {syncState.status === 'offline' && `${syncState.queueSize || 0} changes pending`}
+                      {syncState.status === 'error' && 'Sync error occurred'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {syncState.status === 'synced' && (
+                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    )}
+                    {syncState.status === 'syncing' && (
+                      <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                    )}
+                    {syncState.status === 'offline' && (
+                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    )}
+                    {syncState.status === 'error' && (
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <Cloud className="w-4 h-4" />
+                  <span>
+                    {syncState.queueSize > 0
+                      ? `${syncState.queueSize} item${syncState.queueSize !== 1 ? 's' : ''} in queue`
+                      : 'Everything up to date'}
+                  </span>
+                </div>
+
+                <Button
+                  onClick={() => syncManager.triggerSync()}
+                  disabled={syncState.status === 'syncing'}
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-blue-500/20 text-blue-400 hover:bg-blue-500/10"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncState.status === 'syncing' ? 'animate-spin' : ''}`} />
+                  {syncState.status === 'syncing' ? 'Syncing...' : 'Sync Now'}
+                </Button>
+
+                {syncState.lastSync && (
+                  <p className="text-xs text-gray-500 text-center">
+                    Last synced: {new Date(syncState.lastSync).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* API Key Card */}
         <Card className="bg-[#1a1a1a] border-[#333333]">

@@ -1,6 +1,7 @@
 import chatbotConfig from '@/data/chatbot-config.json'
 import defaultTags from '@/data/tags.json'
 import defaultAiInstructions from '@/data/ai-instructions.json'
+import { storageAdapter } from './storage-adapter'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 // Use proxy in development to avoid CORS issues with Admin API
@@ -48,6 +49,7 @@ function estimateConversationTokens(messages, context = '') {
   return total
 }
 
+// Synchronous version for backwards compatibility (doesn't trigger sync)
 export function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE_KEY) || ''
 }
@@ -55,6 +57,15 @@ export function getApiKey() {
 export function hasApiKey() {
   const key = getApiKey()
   return key && key.trim().length > 0
+}
+
+// Async version with encryption and sync support (use in new code)
+export async function getApiKeyAsync() {
+  return await storageAdapter.getItem(API_KEY_STORAGE_KEY) || ''
+}
+
+export async function saveApiKey(key) {
+  await storageAdapter.setItem(API_KEY_STORAGE_KEY, key.trim())
 }
 
 function buildTools() {
@@ -319,6 +330,7 @@ export async function sendMessage(messages, onChunk, onComplete, onError, onSear
   }
 }
 
+// Synchronous versions for backwards compatibility
 export function getMenuItems() {
   try {
     const stored = localStorage.getItem(MENU_ITEMS_STORAGE_KEY)
@@ -339,6 +351,24 @@ export function saveMenuItems(menuItems) {
   localStorage.setItem(MENU_ITEMS_STORAGE_KEY, JSON.stringify(menuItems))
 }
 
+// Async versions with sync support
+export async function getMenuItemsAsync() {
+  try {
+    const stored = await storageAdapter.getItem(MENU_ITEMS_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    // Use defaults on error
+  }
+  return chatbotConfig.menuItems
+}
+
+export async function saveMenuItemsAsync(menuItems) {
+  await storageAdapter.setItem(MENU_ITEMS_STORAGE_KEY, JSON.stringify(menuItems))
+}
+
+// Synchronous versions for backwards compatibility
 export function getModelPricing() {
   try {
     const stored = localStorage.getItem(MODEL_PRICING_STORAGE_KEY)
@@ -357,6 +387,23 @@ export function getDefaultModelPricing() {
 
 export function saveModelPricing(pricing) {
   localStorage.setItem(MODEL_PRICING_STORAGE_KEY, JSON.stringify(pricing))
+}
+
+// Async versions with sync support
+export async function getModelPricingAsync() {
+  try {
+    const stored = await storageAdapter.getItem(MODEL_PRICING_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    // Use defaults on error
+  }
+  return DEFAULT_MODEL_PRICING
+}
+
+export async function saveModelPricingAsync(pricing) {
+  await storageAdapter.setItem(MODEL_PRICING_STORAGE_KEY, JSON.stringify(pricing))
 }
 
 function getTagsAndInstructions() {
@@ -401,7 +448,7 @@ export function formatTemplate(template, selectedText) {
   return { prompt: result, contextAddition }
 }
 
-// Admin API Key functions
+// Admin API Key functions (synchronous for backwards compatibility)
 export function getAdminApiKey() {
   return localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) || ''
 }
@@ -413,6 +460,15 @@ export function hasAdminApiKey() {
 
 export function saveAdminApiKey(key) {
   localStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, key.trim())
+}
+
+// Async versions with encryption and sync support
+export async function getAdminApiKeyAsync() {
+  return await storageAdapter.getItem(ADMIN_API_KEY_STORAGE_KEY) || ''
+}
+
+export async function saveAdminApiKeyAsync(key) {
+  await storageAdapter.setItem(ADMIN_API_KEY_STORAGE_KEY, key.trim())
 }
 
 // Cost Report API

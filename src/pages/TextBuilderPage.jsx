@@ -123,13 +123,14 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   // Listen for mouseup to check selection
   useEffect(() => {
     const handleMouseUp = (e) => {
-      // Only check selection if mouseup is inside a CodeMirror editor
-      if (e.target.closest('.cm-editor')) {
+      // Check selection if mouseup is inside a CodeMirror editor or if we have a focused editor
+      if (e.target.closest('.cm-editor') || focusedTextareaRef?.current) {
         setTimeout(handleSelectionCheck, 10)
       }
     }
     const handleKeyUp = (e) => {
-      if (e.shiftKey) {
+      // Check for shift+arrows or Ctrl+A (select all)
+      if (e.shiftKey || (e.ctrlKey && e.key === 'a') || (e.metaKey && e.key === 'a')) {
         setTimeout(handleSelectionCheck, 10)
       }
     }
@@ -139,12 +140,16 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
       window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [handleSelectionCheck])
+  }, [handleSelectionCheck, focusedTextareaRef])
 
   // Any key or click to close selection toolbar
   useEffect(() => {
     if (!selectionToolbar.visible) return
-    const handleKeyDown = () => {
+    const handleKeyDown = (e) => {
+      // Don't close on modifier keys or selection shortcuts (Ctrl+A, Cmd+A)
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+        return
+      }
       setSelectionToolbar({ visible: false, position: null, text: '' })
     }
     const handleMouseDown = (e) => {
