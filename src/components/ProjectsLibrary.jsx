@@ -66,7 +66,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     } else if (tagFilter) {
       texts = allTexts.filter(t => t.tags?.includes(tagFilter))
     } else if (activeProject) {
-      texts = activeProject.texts.map(t => ({
+      texts = (activeProject.texts || []).map(t => ({
         ...t,
         projectId: activeProject.id,
         projectName: activeProject.name,
@@ -295,7 +295,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                     >
                       <FolderOpen className={`w-3.5 h-3.5 ${isActive ? colors.text : ''}`} />
                       <span className="truncate flex-1 text-left">{project.name}</span>
-                      <span className="text-xs text-gray-500">{project.texts.length}</span>
+                      <span className="text-xs text-gray-500">{(project.texts || []).length}</span>
                     </button>
                   )}
 
