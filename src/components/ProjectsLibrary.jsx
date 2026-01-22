@@ -148,7 +148,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     }
     setProjects(projects.map(p =>
       p.id === projectId
-        ? { ...p, texts: [...p.texts, newText], updatedAt: Date.now() }
+        ? { ...p, texts: [...(p.texts || []), newText], updatedAt: Date.now() }
         : p
     ))
     return newText
@@ -159,7 +159,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
       p.id === projectId
         ? {
             ...p,
-            texts: p.texts.map(t =>
+            texts: (p.texts || []).map(t =>
               t.id === textId ? { ...t, ...updates, updatedAt: Date.now() } : t
             ),
             updatedAt: Date.now()
@@ -172,7 +172,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
   const handleDeleteText = (projectId, textId) => {
     setProjects(projects.map(p =>
       p.id === projectId
-        ? { ...p, texts: p.texts.filter(t => t.id !== textId), updatedAt: Date.now() }
+        ? { ...p, texts: (p.texts || []).filter(t => t.id !== textId), updatedAt: Date.now() }
         : p
     ))
   }
@@ -182,7 +182,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
       p.id === projectId
         ? {
             ...p,
-            texts: p.texts.map(t =>
+            texts: (p.texts || []).map(t =>
               t.id === textId ? { ...t, isFavorite: !t.isFavorite, updatedAt: Date.now() } : t
             ),
             updatedAt: Date.now()
@@ -788,7 +788,7 @@ export function useProjectsStorage() {
 
     setProjects(prev => prev.map(p =>
       p.id === projectId
-        ? { ...p, texts: [...p.texts, newText], updatedAt: Date.now() }
+        ? { ...p, texts: [...(p.texts || []), newText], updatedAt: Date.now() }
         : p
     ))
 
