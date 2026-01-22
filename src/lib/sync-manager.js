@@ -273,24 +273,64 @@ export class SyncManager {
         localStorage.setItem(key, JSON.stringify(setting.value));
       }
 
-      // Import tags
+      // Import tags - transform from database format (tag_id) to frontend format (id)
       if (data.tags?.length > 0) {
-        localStorage.setItem('textbuilder-tags', JSON.stringify(data.tags));
+        const transformedTags = data.tags.map(t => ({
+          id: t.tag_id || t.id,
+          name: t.name,
+          description: t.description || '',
+          category: t.category,
+          isCustom: t.is_custom,
+          action: t.action
+        }));
+        localStorage.setItem('textbuilder-tags', JSON.stringify(transformedTags));
       }
 
-      // Import AI instructions
+      // Import AI instructions - transform from database format (instruction_id) to frontend format (id)
       if (data.aiInstructions?.length > 0) {
-        localStorage.setItem('textbuilder-ai-instructions', JSON.stringify(data.aiInstructions));
+        const transformedInstructions = data.aiInstructions.map(i => ({
+          id: i.instruction_id || i.id,
+          name: i.name,
+          description: i.description || '',
+          isCustom: i.is_custom
+        }));
+        localStorage.setItem('textbuilder-ai-instructions', JSON.stringify(transformedInstructions));
       }
 
-      // Import templates
+      // Import templates - transform from database format (template_id) to frontend format (id)
       if (data.templates?.length > 0) {
-        localStorage.setItem('textbuilder-templates', JSON.stringify(data.templates));
+        const transformedTemplates = data.templates.map(t => ({
+          id: t.template_id || t.id,
+          title: t.title,
+          text: t.text,
+          category: t.category,
+          isCustom: t.is_custom
+        }));
+        localStorage.setItem('textbuilder-templates', JSON.stringify(transformedTemplates));
       }
 
-      // Import projects
+      // Import projects - transform from database format to localStorage format
       if (data.projects?.length > 0) {
-        localStorage.setItem('textbuilder-projects', JSON.stringify(data.projects));
+        const transformedProjects = data.projects.map(p => {
+          // Database stores: { id, user_id, project_id, name, color, data: {...}, updated_at }
+          // Frontend expects: { id, name, color, texts: [...], ... }
+          if (p.data && typeof p.data === 'object') {
+            // The full project was stored in the data field
+            return {
+              ...p.data,
+              id: p.project_id || p.data.id,
+              name: p.name || p.data.name,
+              color: p.color || p.data.color
+            };
+          }
+          // Fallback: use the row as-is but map project_id to id
+          return {
+            ...p,
+            id: p.project_id || p.id,
+            texts: p.texts || []
+          };
+        });
+        localStorage.setItem('textbuilder-projects', JSON.stringify(transformedProjects));
       }
 
       // Update last sync timestamp
