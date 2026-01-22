@@ -211,6 +211,17 @@ export const tagsApi = {
   },
 
   /**
+   * Batch create multiple tags at once
+   */
+  async batchCreate(tagsArray) {
+    const data = await apiRequest('/tags', {
+      method: 'POST',
+      body: JSON.stringify(tagsArray),
+    });
+    return data.tags;
+  },
+
+  /**
    * Update a tag
    */
   async update(tagId, updates) {
@@ -252,6 +263,17 @@ export const instructionsApi = {
       body: JSON.stringify({ name, description }),
     });
     return data.instruction;
+  },
+
+  /**
+   * Batch create multiple instructions at once
+   */
+  async batchCreate(instructionsArray) {
+    const data = await apiRequest('/instructions', {
+      method: 'POST',
+      body: JSON.stringify(instructionsArray),
+    });
+    return data.instructions;
   },
 
   /**

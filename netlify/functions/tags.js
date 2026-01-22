@@ -1,7 +1,7 @@
 /**
  * Tags REST API
  * GET    /tags        - List all tags
- * POST   /tags        - Create a tag
+ * POST   /tags        - Create a tag (or batch create if body is array)
  * PUT    /tags/:id    - Update a tag
  * DELETE /tags/:id    - Delete a tag
  */
@@ -35,8 +35,14 @@ export const handler = async (event) => {
       case 'GET':
         return await listTags(userId, origin);
 
-      case 'POST':
-        return await createTag(userId, JSON.parse(event.body), origin);
+      case 'POST': {
+        const body = JSON.parse(event.body);
+        // Support batch create if body is an array
+        if (Array.isArray(body)) {
+          return await batchCreateTags(userId, body, origin);
+        }
+        return await createTag(userId, body, origin);
+      }
 
       case 'PUT':
         if (!tagId) {
@@ -126,6 +132,44 @@ async function createTag(userId, body, origin) {
   };
 
   return successResponse({ tag }, 201, {}, origin);
+}
+
+/**
+ * Batch create multiple tags at once
+ */
+async function batchCreateTags(userId, tagsArray, origin) {
+  if (!tagsArray.length) {
+    return successResponse({ tags: [] }, 201, {}, origin);
+  }
+
+  const now = Date.now();
+  const rows = tagsArray.map((tag, index) => ({
+    user_id: userId,
+    tag_id: now + index,
+    name: tag.name?.trim() || '',
+    description: (tag.description || '').trim(),
+    category: tag.category || 'custom',
+    is_custom: true,
+    action: tag.action || ''
+  })).filter(row => row.name); // Filter out empty names
+
+  const { data, error } = await supabase
+    .from('tags')
+    .insert(rows)
+    .select();
+
+  if (error) throw error;
+
+  const tags = (data || []).map(t => ({
+    id: t.tag_id,
+    name: t.name,
+    description: t.description,
+    category: t.category,
+    isCustom: t.is_custom,
+    action: t.action
+  }));
+
+  return successResponse({ tags }, 201, {}, origin);
 }
 
 /**

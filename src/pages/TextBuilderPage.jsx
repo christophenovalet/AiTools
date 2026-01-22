@@ -9,11 +9,33 @@ import { ProjectsModal } from '@/components/ProjectsModal'
 import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
 import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings, GitCompare } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings, GitCompare, RotateCcw, Check } from 'lucide-react'
 import { getShortcut, matchesShortcut, formatShortcut } from '@/lib/keyboard-shortcuts'
 import { CompareColumnsModal } from '@/components/CompareColumnsModal'
+import { textsApi, isAuthenticated } from '@/lib/api'
+
+// Helper to generate default title with date format: "New prompt Friday 0610"
+const generateDefaultTitle = () => {
+  const now = new Date()
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `New prompt ${dayName} ${month}${day}`
+}
 
 export function TextBuilderPage({ onBackHome, onOpenSettings }) {
+  // Document title state
+  const [documentTitle, setDocumentTitle] = useState(generateDefaultTitle)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editingTitleValue, setEditingTitleValue] = useState('')
+  const titleInputRef = useRef(null)
+
+  // Track unsaved changes and last saved state
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [lastSavedState, setLastSavedState] = useState(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const pendingNavigationRef = useRef(null)
+
   const [columns, setColumns] = useState([
     {
       id: 1,
@@ -33,7 +55,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [contentToSave, setContentToSave] = useState('')
   const [showProjectsModal, setShowProjectsModal] = useState(false)
-  const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId }
+  const [lastSavedRef, setLastSavedRef] = useState(null) // { projectId, textId, title }
   const [expandedBlocksColumns, setExpandedBlocksColumns] = useState(new Set()) // Track which columns have blocks expanded
 
   // Compare columns state
@@ -95,6 +117,60 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus()
+      titleInputRef.current.select()
+    }
+  }, [isEditingTitle])
+
+  // Track changes to mark document as dirty
+  useEffect(() => {
+    // Skip initial render
+    const hasContent = columns.some(col => col.text.trim() !== '')
+    if (hasContent) {
+      setHasUnsavedChanges(true)
+      // Save current state to localStorage for reload functionality (with timestamp)
+      const currentState = {
+        columns,
+        selectedBlocks,
+        documentTitle,
+        savedAt: new Date().toISOString()
+      }
+      localStorage.setItem('promptDesigner_lastState', JSON.stringify(currentState))
+    }
+  }, [columns, selectedBlocks, documentTitle])
+
+  // Get last saved info for tooltip
+  const getLastSavedInfo = useCallback(() => {
+    const savedState = localStorage.getItem('promptDesigner_lastState')
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState)
+        const title = parsed.documentTitle || 'Untitled'
+        const date = parsed.savedAt ? new Date(parsed.savedAt).toLocaleString() : 'Unknown'
+        return `${title}\n${date}`
+      } catch {
+        return 'No saved state'
+      }
+    }
+    return 'No saved state'
+  }, [])
+
+  // Browser beforeunload warning for unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+        return ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   // Handle text selection for toolbar
   const handleSelectionCheck = useCallback(() => {
@@ -176,6 +252,72 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     setSelectionToolbar({ visible: false, position: null, text: '' })
     // Clear the text selection to prevent toolbar from reappearing on mouseup
     window.getSelection()?.removeAllRanges()
+  }, [])
+
+  // Title editing handlers
+  const startEditingTitle = useCallback(() => {
+    setEditingTitleValue(documentTitle)
+    setIsEditingTitle(true)
+  }, [documentTitle])
+
+  const saveTitle = useCallback(() => {
+    const trimmedTitle = editingTitleValue.trim()
+    if (trimmedTitle) {
+      setDocumentTitle(trimmedTitle)
+    }
+    setIsEditingTitle(false)
+  }, [editingTitleValue])
+
+  const cancelEditingTitle = useCallback(() => {
+    setIsEditingTitle(false)
+    setEditingTitleValue('')
+  }, [])
+
+  const handleTitleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveTitle()
+    } else if (e.key === 'Escape') {
+      cancelEditingTitle()
+    }
+  }, [saveTitle, cancelEditingTitle])
+
+  // Reload last edited state from localStorage
+  const reloadLastState = useCallback(() => {
+    const savedState = localStorage.getItem('promptDesigner_lastState')
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState)
+        if (parsed.columns) setColumns(parsed.columns)
+        if (parsed.selectedBlocks) setSelectedBlocks(parsed.selectedBlocks)
+        if (parsed.documentTitle) setDocumentTitle(parsed.documentTitle)
+      } catch (err) {
+        console.error('Failed to restore last state:', err)
+      }
+    }
+  }, [])
+
+  // Handle navigation with unsaved changes warning
+  const handleNavigateHome = useCallback(() => {
+    if (hasUnsavedChanges) {
+      pendingNavigationRef.current = 'home'
+      setShowUnsavedDialog(true)
+    } else {
+      onBackHome()
+    }
+  }, [hasUnsavedChanges, onBackHome])
+
+  const confirmNavigation = useCallback(() => {
+    setShowUnsavedDialog(false)
+    if (pendingNavigationRef.current === 'home') {
+      onBackHome()
+    }
+    pendingNavigationRef.current = null
+  }, [onBackHome])
+
+  const cancelNavigation = useCallback(() => {
+    setShowUnsavedDialog(false)
+    pendingNavigationRef.current = null
   }, [])
 
   const updateColumn = (index, updatedColumn) => {
@@ -454,28 +596,21 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     if (state.expandedBlocksColumns) setExpandedBlocksColumns(new Set(state.expandedBlocksColumns))
   }
 
-  const handleSaveToProject = () => {
+  const handleSaveToProject = async () => {
     const workspaceState = getWorkspaceState()
 
     if (lastSavedRef) {
-      // Overwrite existing save silently
-      const stored = localStorage.getItem('textbuilder-projects')
-      if (stored) {
-        const projects = JSON.parse(stored)
-        const updatedProjects = projects.map(p =>
-          p.id === lastSavedRef.projectId
-            ? {
-                ...p,
-                texts: p.texts.map(t =>
-                  t.id === lastSavedRef.textId
-                    ? { ...t, state: workspaceState, updatedAt: Date.now() }
-                    : t
-                ),
-                updatedAt: Date.now()
-              }
-            : p
-        )
-        localStorage.setItem('textbuilder-projects', JSON.stringify(updatedProjects))
+      // Overwrite existing save - call API directly
+      if (isAuthenticated()) {
+        try {
+          await textsApi.update(lastSavedRef.textId, lastSavedRef.projectId, {
+            state: workspaceState
+          })
+          console.log('Saved to cloud')
+          setHasUnsavedChanges(false)
+        } catch (err) {
+          console.error('Failed to save to cloud:', err)
+        }
       }
     } else {
       // First save - open modal
@@ -497,6 +632,8 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
     setPreviewText(null)
     setLastSavedRef(null) // Reset save reference
     setExpandedBlocksColumns(new Set()) // Reset expanded blocks
+    setDocumentTitle(generateDefaultTitle()) // Reset to new default title
+    setHasUnsavedChanges(false) // Reset unsaved changes
   }
 
   return (
@@ -505,7 +642,7 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         <div className="flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <Button
-              onClick={onBackHome}
+              onClick={handleNavigateHome}
               variant="ghost"
               className="text-gray-400 hover:text-gray-200"
             >
@@ -528,7 +665,52 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </Button>
-            <h1 className="text-3xl font-bold text-gray-100">Prompt Designer</h1>
+            {/* Editable Document Title */}
+            <div className="flex items-center gap-2">
+              {isEditingTitle ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editingTitleValue}
+                    onChange={(e) => setEditingTitleValue(e.target.value)}
+                    onKeyDown={handleTitleKeyDown}
+                    onBlur={saveTitle}
+                    className="text-2xl font-bold bg-gray-800 text-gray-100 px-2 py-1 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  />
+                  <Button
+                    onClick={saveTitle}
+                    variant="ghost"
+                    size="sm"
+                    className="text-green-400 hover:text-green-300 p-1"
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <h1
+                  onClick={startEditingTitle}
+                  className="text-3xl font-bold text-gray-100 cursor-pointer hover:text-gray-300 transition-colors"
+                  title="Click to edit title"
+                >
+                  {lastSavedRef?.title || documentTitle}
+                </h1>
+              )}
+              {/* Reload last edited text button */}
+              <Button
+                onClick={reloadLastState}
+                variant="ghost"
+                size="sm"
+                className="text-gray-500 hover:text-gray-300 p-1"
+                title={getLastSavedInfo()}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              {/* Unsaved changes indicator */}
+              {hasUnsavedChanges && (
+                <span className="text-xs text-yellow-500 ml-1">●</span>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 items-center">
@@ -695,8 +877,11 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         isOpen={showSaveModal}
         onClose={() => setShowSaveModal(false)}
         workspaceState={getWorkspaceState()}
+        initialTitle={documentTitle}
         onSave={(projectId, text) => {
-          setLastSavedRef({ projectId, textId: text.id })
+          setLastSavedRef({ projectId, textId: text.id, title: text.title })
+          setDocumentTitle(text.title) // Update document title to match saved title
+          setHasUnsavedChanges(false)
         }}
       />
 
@@ -707,7 +892,9 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         onLoadWorkspace={(projectId, text) => {
           if (text.state) {
             restoreWorkspaceState(text.state)
-            setLastSavedRef({ projectId, textId: text.id })
+            setLastSavedRef({ projectId, textId: text.id, title: text.title })
+            setDocumentTitle(text.title) // Update document title to match loaded text
+            setHasUnsavedChanges(false) // Reset since we just loaded
           }
         }}
       />
@@ -758,6 +945,44 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
           onOpenSettings={onOpenSettings}
         />
       ))}
+
+      {/* Unsaved Changes Dialog */}
+      {showUnsavedDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h2 className="text-xl font-bold text-gray-100 mb-3">Unsaved Changes</h2>
+            <p className="text-gray-400 mb-6">
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                onClick={cancelNavigation}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  handleSaveToProject()
+                  cancelNavigation()
+                }}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save
+              </Button>
+              <Button
+                onClick={confirmNavigation}
+                variant="ghost"
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                Leave without saving
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

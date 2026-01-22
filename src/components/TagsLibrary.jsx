@@ -4,6 +4,7 @@ import { Button } from './ui/button'
 import { tagsApi, instructionsApi } from '@/lib/api'
 import tagsData from '@/data/tags.json'
 import aiInstructionsData from '@/data/ai-instructions.json'
+import { updateTagsCache } from './TagsOverlay'
 
 export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
   const [tags, setTags] = useState([])
@@ -34,60 +35,63 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
       ])
 
       // If no tags in database, seed with defaults
+      let finalTags, finalInstructions
       if (tagsResult.length === 0) {
         await seedDefaultTags()
-        const seededTags = await tagsApi.list()
-        setTags(seededTags)
+        finalTags = await tagsApi.list()
       } else {
-        setTags(tagsResult)
+        finalTags = tagsResult
       }
 
       // If no instructions in database, seed with defaults
       if (instructionsResult.length === 0) {
         await seedDefaultInstructions()
-        const seededInstructions = await instructionsApi.list()
-        setAiInstructions(seededInstructions)
+        finalInstructions = await instructionsApi.list()
       } else {
-        setAiInstructions(instructionsResult)
+        finalInstructions = instructionsResult
       }
+
+      setTags(finalTags)
+      setAiInstructions(finalInstructions)
+      // Update cache for TagsOverlay
+      updateTagsCache(finalTags, finalInstructions)
     } catch (err) {
       console.error('Failed to load tags/instructions:', err)
       setError(err.message)
       // Fallback to JSON data if API fails
       setTags(tagsData)
       setAiInstructions(aiInstructionsData)
+      updateTagsCache(tagsData, aiInstructionsData)
     } finally {
       setLoading(false)
     }
   }
 
   const seedDefaultTags = async () => {
-    console.log('Seeding default tags...')
-    for (const tag of tagsData) {
-      try {
-        await tagsApi.create({
-          name: tag.name,
-          description: tag.description || '',
-          category: tag.category || 'general',
-          action: tag.action || ''
-        })
-      } catch (err) {
-        console.error('Failed to seed tag:', tag.name, err)
-      }
+    console.log('Seeding default tags (batch)...')
+    try {
+      const tagsToCreate = tagsData.map(tag => ({
+        name: tag.name,
+        description: tag.description || '',
+        category: tag.category || 'general',
+        action: tag.action || ''
+      }))
+      await tagsApi.batchCreate(tagsToCreate)
+    } catch (err) {
+      console.error('Failed to seed tags:', err)
     }
   }
 
   const seedDefaultInstructions = async () => {
-    console.log('Seeding default AI instructions...')
-    for (const inst of aiInstructionsData) {
-      try {
-        await instructionsApi.create({
-          name: inst.name,
-          description: inst.description || ''
-        })
-      } catch (err) {
-        console.error('Failed to seed instruction:', inst.name, err)
-      }
+    console.log('Seeding default AI instructions (batch)...')
+    try {
+      const instructionsToCreate = aiInstructionsData.map(inst => ({
+        name: inst.name,
+        description: inst.description || ''
+      }))
+      await instructionsApi.batchCreate(instructionsToCreate)
+    } catch (err) {
+      console.error('Failed to seed instructions:', err)
     }
   }
 

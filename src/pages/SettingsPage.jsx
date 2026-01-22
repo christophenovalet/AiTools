@@ -226,7 +226,7 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
           <h1 className="text-3xl font-bold text-gray-100">Settings</h1>
         </div>
 
-        {/* Account & Sync Card */}
+        {/* Account Card */}
         <Card className="bg-[#1a1a1a] border-[#333333]">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -234,9 +234,9 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
                 <User className="w-5 h-5 text-blue-500" />
               </div>
               <div>
-                <CardTitle className="text-xl text-gray-100">Account & Sync</CardTitle>
+                <CardTitle className="text-xl text-gray-100">Account</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Manage your account and cloud synchronization
+                  Manage your account
                 </CardDescription>
               </div>
             </div>

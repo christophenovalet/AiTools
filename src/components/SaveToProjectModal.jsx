@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { X, Check, Plus, Folder, FolderOpen, Star, ChevronDown } from 'lucide-react'
+import { X, Check, Plus, Folder, FolderOpen, Star, ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from './ui/button'
+import { projectsApi, textsApi, isAuthenticated } from '@/lib/api'
 
 const PROJECT_COLORS = {
   purple: { bg: 'bg-purple-500/20', border: 'border-purple-500', text: 'text-purple-400' },
@@ -12,10 +13,12 @@ const PROJECT_COLORS = {
   yellow: { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-400' },
 }
 
-const STORAGE_KEY = 'textbuilder-projects'
-
-export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) {
+export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave, initialTitle = '' }) {
   const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -26,80 +29,99 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
   const [newProjectColor, setNewProjectColor] = useState('purple')
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
-  // Load projects from localStorage
+  // Load projects from API when modal opens
   useEffect(() => {
     if (isOpen) {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        setProjects(parsed)
-        if (parsed.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(parsed[0].id)
-        }
-      }
+      loadProjects()
     }
   }, [isOpen])
 
-  // Reset form when modal closes
+  // Set initial title when modal opens, reset when closes
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      setTitle(initialTitle)
+    } else {
       setTitle('')
       setDescription('')
       setTagsInput('')
       setIsFavorite(false)
       setIsCreatingProject(false)
       setNewProjectName('')
+      setError(null)
     }
-  }, [isOpen])
+  }, [isOpen, initialTitle])
+
+  const loadProjects = async () => {
+    if (!isAuthenticated()) {
+      setProjects([])
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await projectsApi.list()
+      setProjects(data || [])
+      if (data?.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(data[0].id)
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isOpen) return null
 
   const selectedProject = projects.find(p => p.id === selectedProjectId)
 
-  const handleCreateProject = () => {
-    if (newProjectName.trim()) {
-      const newProject = {
-        id: Date.now(),
-        name: newProjectName.trim(),
-        color: newProjectColor,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        texts: []
-      }
-      const updatedProjects = [...projects, newProject]
-      setProjects(updatedProjects)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects))
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      const newProject = await projectsApi.create(newProjectName.trim(), newProjectColor)
+      setProjects([...projects, newProject])
       setSelectedProjectId(newProject.id)
       setIsCreatingProject(false)
       setNewProjectName('')
+    } catch (err) {
+      console.error('Failed to create project:', err)
+      setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedProjectId || !title.trim()) return
 
-    const newText = {
-      id: Date.now(),
-      title: title.trim(),
-      state: workspaceState, // Save full workspace state
-      description: description.trim(),
-      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      isFavorite,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+    try {
+      setSaving(true)
+      setError(null)
+
+      const { text, project } = await textsApi.create(selectedProjectId, {
+        title: title.trim(),
+        state: workspaceState,
+        description: description.trim(),
+        tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
+        isFavorite
+      })
+
+      // Update local projects list with the updated project
+      setProjects(projects.map(p => p.id === selectedProjectId ? project : p))
+
+      onSave?.(selectedProjectId, text)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save text:', err)
+      setError(err.message)
+    } finally {
+      setSaving(false)
     }
-
-    const updatedProjects = projects.map(p =>
-      p.id === selectedProjectId
-        ? { ...p, texts: [...p.texts, newText], updatedAt: Date.now() }
-        : p
-    )
-
-    setProjects(updatedProjects)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects))
-
-    onSave?.(selectedProjectId, newText)
-    onClose()
   }
 
   return (
@@ -123,6 +145,13 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
           </button>
         </div>
 
+        {/* Error Banner */}
+        {error && (
+          <div className="mx-4 mt-4 p-2 bg-red-500/20 text-red-400 text-sm rounded">
+            {error}
+          </div>
+        )}
+
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* Title */}
@@ -141,7 +170,12 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
           {/* Project Selection */}
           <div>
             <label className="block text-sm text-gray-400 mb-1.5">Project</label>
-            {isCreatingProject ? (
+            {loading ? (
+              <div className="flex items-center gap-2 text-gray-500 py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Loading projects...</span>
+              </div>
+            ) : isCreatingProject ? (
               <div className="space-y-2">
                 <input
                   type="text"
@@ -172,10 +206,12 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
                 <div className="flex gap-2">
                   <Button
                     onClick={handleCreateProject}
+                    disabled={saving}
                     size="sm"
                     className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
                   >
-                    <Check className="w-4 h-4 mr-1" /> Create
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                    Create
                   </Button>
                   <Button
                     onClick={() => setIsCreatingProject(false)}
@@ -226,7 +262,7 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
                         >
                           <FolderOpen className={`w-4 h-4 ${colors.text}`} />
                           <span className="text-gray-100">{project.name}</span>
-                          <span className="text-xs text-gray-500 ml-auto">{project.texts.length} texts</span>
+                          <span className="text-xs text-gray-500 ml-auto">{(project.texts || []).length} texts</span>
                         </button>
                       )
                     })}
@@ -317,11 +353,20 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!selectedProjectId || !title.trim()}
+            disabled={!selectedProjectId || !title.trim() || saving}
             className="bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Check className="w-4 h-4 mr-1" />
-            Save to Project
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-1" />
+                Save to Project
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -330,41 +375,38 @@ export function SaveToProjectModal({ isOpen, onClose, workspaceState, onSave }) 
 }
 
 // Quick Save Dropdown (for inline save button)
-export function QuickSaveDropdown({ content, onSave, trigger }) {
+export function QuickSaveDropdown({ workspaceState, onSave, trigger }) {
   const [isOpen, setIsOpen] = useState(false)
   const [projects, setProjects] = useState([])
+  const [saving, setSaving] = useState(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      setProjects(JSON.parse(stored))
+    if (isOpen && isAuthenticated()) {
+      projectsApi.list().then(data => setProjects(data || [])).catch(console.error)
     }
   }, [isOpen])
 
-  const handleQuickSave = (projectId) => {
+  const handleQuickSave = async (projectId) => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return
 
-    const newText = {
-      id: Date.now(),
-      title: `Quick Save ${new Date().toLocaleString()}`,
-      content: content,
-      description: '',
-      tags: [],
-      isFavorite: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+    try {
+      setSaving(projectId)
+      const { text } = await textsApi.create(projectId, {
+        title: `Quick Save ${new Date().toLocaleString()}`,
+        state: workspaceState,
+        description: '',
+        tags: [],
+        isFavorite: false
+      })
+
+      onSave?.(projectId, text)
+      setIsOpen(false)
+    } catch (err) {
+      console.error('Failed to quick save:', err)
+    } finally {
+      setSaving(null)
     }
-
-    const updatedProjects = projects.map(p =>
-      p.id === projectId
-        ? { ...p, texts: [...p.texts, newText], updatedAt: Date.now() }
-        : p
-    )
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects))
-    onSave?.(projectId, newText)
-    setIsOpen(false)
   }
 
   return (
@@ -391,9 +433,14 @@ export function QuickSaveDropdown({ content, onSave, trigger }) {
                   <button
                     key={project.id}
                     onClick={() => handleQuickSave(project.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-800 transition-colors"
+                    disabled={saving === project.id}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-800 transition-colors disabled:opacity-50"
                   >
-                    <FolderOpen className={`w-4 h-4 ${colors.text}`} />
+                    {saving === project.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                    ) : (
+                      <FolderOpen className={`w-4 h-4 ${colors.text}`} />
+                    )}
                     <span className="text-gray-100">{project.name}</span>
                   </button>
                 )

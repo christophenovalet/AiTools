@@ -35,8 +35,14 @@ export const handler = async (event) => {
       case 'GET':
         return await listInstructions(userId, origin);
 
-      case 'POST':
-        return await createInstruction(userId, JSON.parse(event.body), origin);
+      case 'POST': {
+        const body = JSON.parse(event.body);
+        // Support batch create if body is an array
+        if (Array.isArray(body)) {
+          return await batchCreateInstructions(userId, body, origin);
+        }
+        return await createInstruction(userId, body, origin);
+      }
 
       case 'PUT':
         if (!instructionId) {
@@ -120,6 +126,40 @@ async function createInstruction(userId, body, origin) {
   };
 
   return successResponse({ instruction }, 201, {}, origin);
+}
+
+/**
+ * Batch create multiple instructions at once
+ */
+async function batchCreateInstructions(userId, instructionsArray, origin) {
+  if (!instructionsArray.length) {
+    return successResponse({ instructions: [] }, 201, {}, origin);
+  }
+
+  const now = Date.now();
+  const rows = instructionsArray.map((inst, index) => ({
+    user_id: userId,
+    instruction_id: now + index,
+    name: inst.name?.trim() || '',
+    description: (inst.description || '').trim(),
+    is_custom: true
+  })).filter(row => row.name); // Filter out empty names
+
+  const { data, error } = await supabase
+    .from('ai_instructions')
+    .insert(rows)
+    .select();
+
+  if (error) throw error;
+
+  const instructions = (data || []).map(i => ({
+    id: i.instruction_id,
+    name: i.name,
+    description: i.description,
+    isCustom: i.is_custom
+  }));
+
+  return successResponse({ instructions }, 201, {}, origin);
 }
 
 /**

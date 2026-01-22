@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react'
 import {
   Plus, Copy, Trash2, Edit2, Check, X, Star, Search,
   FolderOpen, Folder, LayoutGrid, List, MoreHorizontal,
-  ChevronRight, Clock, Tag, Heart
+  Clock, Loader2
 } from 'lucide-react'
 import { Button } from './ui/button'
+import { projectsApi, textsApi, isAuthenticated } from '@/lib/api'
 import projectsData from '@/data/projects.json'
 
 const PROJECT_COLORS = {
@@ -17,18 +18,16 @@ const PROJECT_COLORS = {
   yellow: { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-400' },
 }
 
-const STORAGE_KEY = 'textbuilder-projects'
-
 export function ProjectsLibrary({ onLoadWorkspace }) {
-  const [projects, setProjects] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : projectsData
-  })
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   const [activeProjectId, setActiveProjectId] = useState(null)
-  const [viewMode, setViewMode] = useState('grid') // grid | list
+  const [viewMode, setViewMode] = useState('list')
   const [searchFilter, setSearchFilter] = useState('')
-  const [quickFilter, setQuickFilter] = useState('recent') // all | favorites | recent
+  const [quickFilter, setQuickFilter] = useState('recent')
   const [tagFilter, setTagFilter] = useState(null)
   const [isAddingProject, setIsAddingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
@@ -37,29 +36,37 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
   const [editingTextId, setEditingTextId] = useState(null)
   const [showProjectMenu, setShowProjectMenu] = useState(null)
 
-  // Persist to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-  }, [projects])
+  // Drag and drop state
+  const [draggedText, setDraggedText] = useState(null)
+  const [dragOverProject, setDragOverProject] = useState(null)
 
-  // Reload projects when sync completes (from another device)
+  // Load projects from API on mount
   useEffect(() => {
-    const handleSyncComplete = () => {
-      console.log('Sync complete, reloading projects...')
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored)
-          setProjects(parsed)
-        } catch (e) {
-          console.error('Failed to parse projects after sync:', e)
-        }
-      }
+    loadProjects()
+  }, [])
+
+  const loadProjects = async () => {
+    if (!isAuthenticated()) {
+      // Fallback to sample data for non-authenticated users
+      setProjects(projectsData)
+      setLoading(false)
+      return
     }
 
-    window.addEventListener('sync-complete', handleSyncComplete)
-    return () => window.removeEventListener('sync-complete', handleSyncComplete)
-  }, [])
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await projectsApi.list()
+      setProjects(data || [])
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+      setError(err.message)
+      // Fallback to sample data on error
+      setProjects(projectsData)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Get active project
   const activeProject = (projects || []).find(p => p.id === activeProjectId)
@@ -81,7 +88,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     if (quickFilter === 'favorites') {
       texts = allTexts.filter(t => t.isFavorite)
     } else if (quickFilter === 'recent') {
-      texts = [...allTexts].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10)
+      texts = [...allTexts].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 10)
     } else if (tagFilter) {
       texts = allTexts.filter(t => t.tags?.includes(tagFilter))
     } else if (activeProject) {
@@ -99,8 +106,8 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     if (searchFilter) {
       const query = searchFilter.toLowerCase()
       texts = texts.filter(t =>
-        t.title.toLowerCase().includes(query) ||
-        t.content.toLowerCase().includes(query) ||
+        t.title?.toLowerCase().includes(query) ||
+        t.content?.toLowerCase().includes(query) ||
         t.description?.toLowerCase().includes(query) ||
         t.tags?.some(tag => tag.toLowerCase().includes(query))
       )
@@ -111,9 +118,13 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
 
   const filteredTexts = getFilteredTexts()
 
-  // Project CRUD
-  const handleAddProject = () => {
-    if (newProjectName.trim()) {
+  // ============ Project CRUD ============
+
+  const handleAddProject = async () => {
+    if (!newProjectName.trim()) return
+
+    if (!isAuthenticated()) {
+      // Local only for non-authenticated users
       const newProject = {
         id: Date.now(),
         name: newProjectName.trim(),
@@ -128,52 +139,88 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
       setActiveProjectId(newProject.id)
       setQuickFilter('all')
       setTagFilter(null)
+      return
+    }
+
+    try {
+      setSaving(true)
+      const newProject = await projectsApi.create(newProjectName.trim(), newProjectColor)
+      setProjects([...projects, newProject])
+      setNewProjectName('')
+      setIsAddingProject(false)
+      setActiveProjectId(newProject.id)
+      setQuickFilter('all')
+      setTagFilter(null)
+    } catch (err) {
+      console.error('Failed to create project:', err)
+      setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleRenameProject = (id, newName) => {
+  const handleRenameProject = async (id, newName) => {
+    if (!newName.trim()) {
+      setEditingProjectId(null)
+      return
+    }
+
+    // Optimistic update
     setProjects(projects.map(p =>
-      p.id === id ? { ...p, name: newName, updatedAt: Date.now() } : p
+      p.id === id ? { ...p, name: newName.trim(), updatedAt: Date.now() } : p
     ))
     setEditingProjectId(null)
+
+    if (!isAuthenticated()) return
+
+    try {
+      await projectsApi.update(id, { name: newName.trim() })
+    } catch (err) {
+      console.error('Failed to rename project:', err)
+      // Reload on error
+      loadProjects()
+    }
   }
 
-  const handleDeleteProject = (id) => {
+  const handleDeleteProject = async (id) => {
+    // Optimistic update
     setProjects(projects.filter(p => p.id !== id))
     if (activeProjectId === id) {
       setActiveProjectId(null)
     }
     setShowProjectMenu(null)
+
+    if (!isAuthenticated()) return
+
+    try {
+      await projectsApi.delete(id)
+    } catch (err) {
+      console.error('Failed to delete project:', err)
+      loadProjects()
+    }
   }
 
-  const handleChangeProjectColor = (id, color) => {
+  const handleChangeProjectColor = async (id, color) => {
+    // Optimistic update
     setProjects(projects.map(p =>
       p.id === id ? { ...p, color, updatedAt: Date.now() } : p
     ))
     setShowProjectMenu(null)
-  }
 
-  // Text CRUD
-  const handleAddText = (projectId, textData) => {
-    const newText = {
-      id: Date.now(),
-      title: textData.title || 'Untitled',
-      content: textData.content || '',
-      description: textData.description || '',
-      tags: textData.tags || [],
-      isFavorite: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+    if (!isAuthenticated()) return
+
+    try {
+      await projectsApi.update(id, { color })
+    } catch (err) {
+      console.error('Failed to change project color:', err)
+      loadProjects()
     }
-    setProjects(projects.map(p =>
-      p.id === projectId
-        ? { ...p, texts: [...(p.texts || []), newText], updatedAt: Date.now() }
-        : p
-    ))
-    return newText
   }
 
-  const handleUpdateText = (projectId, textId, updates) => {
+  // ============ Text CRUD ============
+
+  const handleUpdateText = async (projectId, textId, updates) => {
+    // Optimistic update
     setProjects(projects.map(p =>
       p.id === projectId
         ? {
@@ -186,33 +233,132 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
         : p
     ))
     setEditingTextId(null)
+
+    if (!isAuthenticated()) return
+
+    try {
+      await textsApi.update(textId, projectId, updates)
+    } catch (err) {
+      console.error('Failed to update text:', err)
+      loadProjects()
+    }
   }
 
-  const handleDeleteText = (projectId, textId) => {
+  const handleDeleteText = async (projectId, textId) => {
+    // Optimistic update
     setProjects(projects.map(p =>
       p.id === projectId
         ? { ...p, texts: (p.texts || []).filter(t => t.id !== textId), updatedAt: Date.now() }
         : p
     ))
+
+    if (!isAuthenticated()) return
+
+    try {
+      await textsApi.delete(textId, projectId)
+    } catch (err) {
+      console.error('Failed to delete text:', err)
+      loadProjects()
+    }
   }
 
-  const handleToggleFavorite = (projectId, textId) => {
+  const handleToggleFavorite = async (projectId, textId) => {
+    const project = projects.find(p => p.id === projectId)
+    const text = project?.texts?.find(t => t.id === textId)
+    if (!text) return
+
+    const newFavorite = !text.isFavorite
+
+    // Optimistic update
     setProjects(projects.map(p =>
       p.id === projectId
         ? {
             ...p,
             texts: (p.texts || []).map(t =>
-              t.id === textId ? { ...t, isFavorite: !t.isFavorite, updatedAt: Date.now() } : t
+              t.id === textId ? { ...t, isFavorite: newFavorite, updatedAt: Date.now() } : t
             ),
             updatedAt: Date.now()
           }
         : p
     ))
+
+    if (!isAuthenticated()) return
+
+    try {
+      await textsApi.update(textId, projectId, { isFavorite: newFavorite })
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err)
+      loadProjects()
+    }
   }
 
   const handleCopyText = (content) => {
-    navigator.clipboard.writeText(content)
+    navigator.clipboard.writeText(content || '')
   }
+
+  // Move text from one project to another
+  const handleMoveText = async (fromProjectId, textId, toProjectId) => {
+    if (fromProjectId === toProjectId) return
+
+    // Find the text to move
+    const fromProject = projects.find(p => p.id === fromProjectId)
+    const textToMove = fromProject?.texts?.find(t => t.id === textId)
+    if (!textToMove) return
+
+    // Optimistic update
+    setProjects(projects.map(p => {
+      if (p.id === fromProjectId) {
+        return { ...p, texts: (p.texts || []).filter(t => t.id !== textId), updatedAt: Date.now() }
+      }
+      if (p.id === toProjectId) {
+        return { ...p, texts: [...(p.texts || []), { ...textToMove, updatedAt: Date.now() }], updatedAt: Date.now() }
+      }
+      return p
+    }))
+
+    if (!isAuthenticated()) return
+
+    try {
+      await textsApi.move(textId, fromProjectId, toProjectId)
+    } catch (err) {
+      console.error('Failed to move text:', err)
+      loadProjects()
+    }
+  }
+
+  // ============ Drag and Drop ============
+
+  const handleDragStart = (e, text) => {
+    setDraggedText(text)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setDraggedText(null)
+    setDragOverProject(null)
+  }
+
+  const handleDragOverProject = (e, projectId) => {
+    e.preventDefault()
+    if (draggedText && draggedText.projectId !== projectId) {
+      setDragOverProject(projectId)
+    }
+  }
+
+  const handleDragLeaveProject = () => {
+    setDragOverProject(null)
+  }
+
+  const handleDropOnProject = (e, toProjectId) => {
+    e.preventDefault()
+    if (draggedText && draggedText.projectId !== toProjectId) {
+      handleMoveText(draggedText.projectId, draggedText.id, toProjectId)
+    }
+    setDraggedText(null)
+    setDragOverProject(null)
+  }
+
+  // ============ Navigation ============
 
   const selectProject = (projectId) => {
     setActiveProjectId(projectId)
@@ -232,7 +378,6 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     setQuickFilter('all')
   }
 
-  // Get current view title
   const getViewTitle = () => {
     if (quickFilter === 'favorites') return 'Favorites'
     if (quickFilter === 'recent') return 'Recent'
@@ -241,14 +386,36 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
     return 'Select a project'
   }
 
+  // ============ Render ============
+
+  if (loading) {
+    return (
+      <div className="flex h-full bg-[#1a1a1a] rounded-lg border border-emerald-500/50 items-center justify-center">
+        <div className="flex items-center gap-2 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading projects...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full bg-[#1a1a1a] rounded-lg border border-emerald-500/50 overflow-hidden">
+      {/* Error Banner */}
+      {error && (
+        <div className="absolute top-0 left-0 right-0 bg-red-500/20 text-red-400 text-xs px-3 py-1 text-center">
+          {error}
+          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">✕</button>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div className="w-48 border-r border-gray-700 flex flex-col bg-[#0a0a0a]">
         <div className="p-3 border-b border-gray-700">
           <h3 className="text-gray-100 font-semibold text-sm flex items-center gap-2">
             <Folder className="w-4 h-4 text-emerald-400" />
             Projects
+            {saving && <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />}
           </h3>
         </div>
 
@@ -288,7 +455,13 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
               const isActive = activeProjectId === project.id && quickFilter === 'all' && !tagFilter
 
               return (
-                <div key={project.id} className="relative group">
+                <div
+                  key={project.id}
+                  className={`relative group ${dragOverProject === project.id ? 'ring-2 ring-emerald-500 rounded' : ''}`}
+                  onDragOver={(e) => handleDragOverProject(e, project.id)}
+                  onDragLeave={handleDragLeaveProject}
+                  onDrop={(e) => handleDropOnProject(e, project.id)}
+                >
                   {editingProjectId === project.id ? (
                     <div className="flex items-center gap-1 px-1">
                       <input
@@ -309,10 +482,12 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${
                         isActive
                           ? `${colors.bg} ${colors.text}`
+                          : dragOverProject === project.id
+                          ? 'bg-emerald-500/20 text-emerald-400'
                           : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                       }`}
                     >
-                      <FolderOpen className={`w-3.5 h-3.5 ${isActive ? colors.text : ''}`} />
+                      <FolderOpen className={`w-3.5 h-3.5 ${colors.text}`} />
                       <span className="truncate flex-1 text-left">{project.name}</span>
                       <span className="text-xs text-gray-500">{(project.texts || []).length}</span>
                     </button>
@@ -397,10 +572,12 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                 <div className="flex gap-1">
                   <Button
                     onClick={handleAddProject}
+                    disabled={saving}
                     size="sm"
                     className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white h-6 text-xs"
                   >
-                    <Check className="w-3 h-3 mr-1" /> Add
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+                    Add
                   </Button>
                   <Button
                     onClick={() => setIsAddingProject(false)}
@@ -520,8 +697,11 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                 return (
                   <div
                     key={`${text.projectId}-${text.id}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, text)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => onLoadWorkspace?.(text.projectId, text)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all bg-[#0a0a0a] border-gray-700 hover:border-gray-500 hover:${colors.bg}`}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all bg-[#0a0a0a] border-gray-700 hover:border-gray-500 hover:${colors.bg} ${draggedText?.id === text.id ? 'opacity-50' : ''}`}
                   >
                     {editingTextId === text.id ? (
                       <TextEditForm
@@ -548,8 +728,11 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                               }`} />
                             </button>
                           </div>
-                          <p className="text-gray-400 text-xs line-clamp-3 mb-2">
+                          <p className="text-gray-400 text-xs line-clamp-3 mb-1">
                             {text.state?.columns?.length || 0} columns, {text.state?.selectedBlocks?.length || 0} blocks selected
+                          </p>
+                          <p className="text-gray-500 text-[10px] mb-2">
+                            Updated {text.updatedAt ? new Date(text.updatedAt).toLocaleDateString() : 'N/A'}
                           </p>
                           {text.tags?.length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-2">
@@ -623,8 +806,11 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
                 return (
                   <div
                     key={`${text.projectId}-${text.id}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, text)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => onLoadWorkspace?.(text.projectId, text)}
-                    className={`grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 px-2 py-2 rounded cursor-pointer transition-all items-center hover:bg-gray-800`}
+                    className={`grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 px-2 py-2 rounded cursor-pointer transition-all items-center hover:bg-gray-800 ${draggedText?.id === text.id ? 'opacity-50' : ''}`}
                   >
                     <button
                       onClick={(e) => {
@@ -700,7 +886,7 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
         {/* Footer */}
         <div className="p-3 border-t border-gray-700 bg-[#0a0a0a]">
           <div className="text-xs text-gray-500 text-center">
-            Click to add to output • Drag to insert • ⭐ to favorite
+            Click to load • Drag to move • ⭐ to favorite
           </div>
         </div>
       </div>
@@ -711,14 +897,12 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
 // Text Edit Form Component
 function TextEditForm({ text, onSave, onCancel }) {
   const [title, setTitle] = useState(text.title)
-  const [content, setContent] = useState(text.content)
   const [description, setDescription] = useState(text.description || '')
   const [tagsInput, setTagsInput] = useState(text.tags?.join(', ') || '')
 
   const handleSubmit = () => {
     onSave({
       title: title.trim() || 'Untitled',
-      content,
       description,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean)
     })
@@ -734,10 +918,10 @@ function TextEditForm({ text, onSave, onCancel }) {
         className="w-full bg-gray-800 text-gray-100 text-xs border border-gray-600 rounded px-2 py-1 outline-none focus:border-emerald-500"
       />
       <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Content..."
-        rows={3}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Description..."
+        rows={2}
         className="w-full bg-gray-800 text-gray-300 text-xs border border-gray-600 rounded px-2 py-1 outline-none focus:border-emerald-500 resize-none"
       />
       <input
@@ -770,6 +954,7 @@ function TextEditForm({ text, onSave, onCancel }) {
 
 // Helper function
 function formatRelativeTime(timestamp) {
+  if (!timestamp) return 'N/A'
   const diff = Date.now() - timestamp
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)
@@ -780,52 +965,4 @@ function formatRelativeTime(timestamp) {
   if (hours < 24) return `${hours}h ago`
   if (days < 7) return `${days}d ago`
   return new Date(timestamp).toLocaleDateString()
-}
-
-// Export helper for saving to project
-export function useProjectsStorage() {
-  const [projects, setProjects] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : projectsData
-  })
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-  }, [projects])
-
-  const saveTextToProject = (projectId, textData) => {
-    const newText = {
-      id: Date.now(),
-      title: textData.title || 'Untitled',
-      content: textData.content || '',
-      description: textData.description || '',
-      tags: textData.tags || [],
-      isFavorite: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }
-
-    setProjects(prev => prev.map(p =>
-      p.id === projectId
-        ? { ...p, texts: [...(p.texts || []), newText], updatedAt: Date.now() }
-        : p
-    ))
-
-    return newText
-  }
-
-  const addProject = (name, color = 'purple') => {
-    const newProject = {
-      id: Date.now(),
-      name,
-      color,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      texts: []
-    }
-    setProjects(prev => [...prev, newProject])
-    return newProject
-  }
-
-  return { projects, saveTextToProject, addProject, setProjects }
 }

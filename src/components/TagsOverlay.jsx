@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { X, RefreshCw } from 'lucide-react'
-import { tagsApi, instructionsApi } from '@/lib/api'
 import tagsData from '@/data/tags.json'
 import aiInstructionsData from '@/data/ai-instructions.json'
+
+// Module-level cache to avoid reloading on every open
+let cachedTags = null
+let cachedInstructions = null
+
+// Export function to update cache when TagsLibrary modifies data
+export function updateTagsCache(tags, instructions) {
+  if (tags !== undefined) cachedTags = tags
+  if (instructions !== undefined) cachedInstructions = instructions
+}
 
 // Regex-based fuzzy matching: converts filter to pattern like "c.*o.*n.*s"
 // Returns match score (lower = better) or null if no match
@@ -28,31 +37,23 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
   const filterRef = useRef(null)
   const overlayRef = useRef(null)
 
-  // Load data from API on mount
+  // Load data from cache only (TagsLibrary populates the cache)
   useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [tagsResult, instructionsResult] = await Promise.all([
-        tagsApi.list(),
-        instructionsApi.list()
-      ])
-
-      // Use API data, or fallback to JSON if empty (seeding happens in TagsLibrary)
-      setTags(tagsResult.length > 0 ? tagsResult : tagsData)
-      setAiInstructions(instructionsResult.length > 0 ? instructionsResult : aiInstructionsData)
-    } catch (err) {
-      console.error('Failed to load tags/instructions:', err)
-      // Fallback to JSON data if API fails
+    // Use cached data if available, otherwise fallback to JSON
+    if (cachedTags && cachedTags.length > 0) {
+      setTags(cachedTags)
+    } else {
       setTags(tagsData)
-      setAiInstructions(aiInstructionsData)
-    } finally {
-      setLoading(false)
     }
-  }
+
+    if (cachedInstructions && cachedInstructions.length > 0) {
+      setAiInstructions(cachedInstructions)
+    } else {
+      setAiInstructions(aiInstructionsData)
+    }
+
+    setLoading(false)
+  }, [])
 
   const filteredTags = tags
     .map(tag => ({ ...tag, score: getMatchScore(filter, tag.name) }))
