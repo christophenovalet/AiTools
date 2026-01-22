@@ -43,16 +43,16 @@ export function ProjectsLibrary({ onLoadWorkspace }) {
   }, [projects])
 
   // Get active project
-  const activeProject = projects.find(p => p.id === activeProjectId)
+  const activeProject = (projects || []).find(p => p.id === activeProjectId)
 
   // Get all unique tags across all projects
   const allTags = [...new Set(
-    projects.flatMap(p => p.texts.flatMap(t => t.tags || []))
+    (projects || []).flatMap(p => (p.texts || []).flatMap(t => t.tags || []))
   )].sort()
 
   // Get all texts (for favorites/recent views)
-  const allTexts = projects.flatMap(p =>
-    p.texts.map(t => ({ ...t, projectId: p.id, projectName: p.name, projectColor: p.color }))
+  const allTexts = (projects || []).flatMap(p =>
+    (p.texts || []).map(t => ({ ...t, projectId: p.id, projectName: p.name, projectColor: p.color }))
   )
 
   // Filter texts based on current view
