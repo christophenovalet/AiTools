@@ -5,33 +5,22 @@ import { TextBuilderPage } from '@/pages/TextBuilderPage'
 import { PromptFrameworkPage } from '@/pages/PromptFrameworkPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import LoginPage from '@/pages/LoginPage'
-import InitialSyncWizard from '@/components/InitialSyncWizard'
-import SyncStatusBadge from '@/components/SyncStatusBadge'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
-import { SyncProvider, useSyncManager } from '@/contexts/SyncContext'
+
+const LAST_PAGE_KEY = 'aitools-last-page'
 
 function AppContent() {
-  const [currentPage, setCurrentPage] = useState('home')
-  const { isAuthenticated, loading: authLoading, user } = useAuth()
-  const { syncManager } = useSyncManager()
-  const [showMigrationWizard, setShowMigrationWizard] = useState(false)
-  const [checkingMigration, setCheckingMigration] = useState(true)
+  const [currentPage, setCurrentPage] = useState(() => {
+    // Load last used page from localStorage
+    const saved = localStorage.getItem(LAST_PAGE_KEY)
+    return saved || 'home'
+  })
+  const { isAuthenticated, loading: authLoading } = useAuth()
 
-  // Check if migration is needed on mount
+  // Save current page to localStorage when it changes
   useEffect(() => {
-    if (isAuthenticated) {
-      const migrationComplete = localStorage.getItem('sync_migration_complete')
-      if (!migrationComplete) {
-        // Check if user has any existing data to migrate
-        const hasData = localStorage.getItem('claude-api-key') ||
-                       localStorage.getItem('textbuilder-projects') ||
-                       localStorage.getItem('textbuilder-tags')
-
-        setShowMigrationWizard(!!hasData)
-      }
-      setCheckingMigration(false)
-    }
-  }, [isAuthenticated])
+    localStorage.setItem(LAST_PAGE_KEY, currentPage)
+  }, [currentPage])
 
   const renderPage = () => {
     switch (currentPage) {
@@ -51,7 +40,7 @@ function AppContent() {
   }
 
   // Show loading state while checking auth
-  if (authLoading || (isAuthenticated && checkingMigration)) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -67,29 +56,9 @@ function AppContent() {
     return <LoginPage />
   }
 
-  // Show migration wizard if needed
-  if (showMigrationWizard) {
-    return (
-      <InitialSyncWizard
-        syncManager={syncManager}
-        userEmail={user?.email}
-        onComplete={() => setShowMigrationWizard(false)}
-        onSkip={() => setShowMigrationWizard(false)}
-      />
-    )
-  }
-
-  // Render main app with sync badge
+  // Render main app
   return (
     <div className="min-h-screen">
-      {/* Sync Status Badge - Fixed position in top right */}
-      {syncManager && (
-        <div className="fixed top-4 right-4 z-50">
-          <SyncStatusBadge syncManager={syncManager} />
-        </div>
-      )}
-
-      {/* Main content */}
       {renderPage()}
     </div>
   )
@@ -98,9 +67,7 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <SyncProvider>
-        <AppContent />
-      </SyncProvider>
+      <AppContent />
     </AuthProvider>
   )
 }

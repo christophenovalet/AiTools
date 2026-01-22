@@ -1,19 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Tags, FileText, Shield, BarChart3, Cloud, User, LogOut, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Key, Eye, EyeOff, Save, Check, MessageSquare, Plus, Trash2, RotateCcw, DollarSign, Keyboard, AlertTriangle, Shield, BarChart3, User, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getMenuItems, getDefaultMenuItems, saveMenuItems, getModelPricing, getDefaultModelPricing, saveModelPricing, getAdminApiKey, saveAdminApiKey, saveApiKey } from '@/lib/claude-api'
 import { getShortcuts, saveShortcuts, resetShortcuts, formatShortcut, parseKeyboardEvent, findConflicts, isValidShortcut, DEFAULT_SHORTCUTS } from '@/lib/keyboard-shortcuts'
 import { useAuth } from '@/contexts/AuthContext'
-import { useSyncManager } from '@/contexts/SyncContext'
-import factoryTags from '@/data/tags.json'
-import factoryInstructions from '@/data/ai-instructions.json'
-import factoryTemplates from '@/data/templates.json'
+import { settingsApi } from '@/lib/api'
 
 const API_KEY_STORAGE_KEY = 'claude-api-key'
-const TAGS_STORAGE_KEY = 'textbuilder-tags'
-const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
-const TEMPLATES_STORAGE_KEY = 'textbuilder-templates'
 
 const MODEL_LABELS = {
   haiku: 'Haiku 4.5',
@@ -22,9 +16,8 @@ const MODEL_LABELS = {
 }
 
 export function SettingsPage({ onBackHome, onOpenCosts }) {
-  // Auth and Sync hooks
+  // Auth hook
   const { user, signOut } = useAuth()
-  const { syncManager, syncState } = useSyncManager()
 
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -40,8 +33,8 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
   const [shortcutsSaved, setShortcutsSaved] = useState(false)
   const [recordingShortcut, setRecordingShortcut] = useState(null)
   const [shortcutConflict, setShortcutConflict] = useState(null)
-  const [tagsReset, setTagsReset] = useState(false)
-  const [templatesReset, setTemplatesReset] = useState(false)
+  const [cloudResetLoading, setCloudResetLoading] = useState(false)
+  const [cloudResetDone, setCloudResetDone] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem(API_KEY_STORAGE_KEY)
@@ -141,48 +134,22 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
     setShortcutConflict(null)
   }
 
-  const handleResetTagsAndInstructions = () => {
-    // Get current tags and instructions from localStorage
-    const storedTags = localStorage.getItem(TAGS_STORAGE_KEY)
-    const storedInstructions = localStorage.getItem(AI_INSTRUCTIONS_STORAGE_KEY)
+  const handleResetToDefaults = async () => {
+    if (cloudResetLoading) return
 
-    const currentTags = storedTags ? JSON.parse(storedTags) : []
-    const currentInstructions = storedInstructions ? JSON.parse(storedInstructions) : []
-
-    // Keep only custom tags (user-created)
-    const customTags = currentTags.filter(tag => tag.custom === true)
-    const customInstructions = currentInstructions.filter(inst => inst.custom === true)
-
-    // Merge factory tags with custom tags (factory first, then custom)
-    const mergedTags = [...factoryTags, ...customTags]
-    const mergedInstructions = [...factoryInstructions, ...customInstructions]
-
-    // Save to localStorage
-    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(mergedTags))
-    localStorage.setItem(AI_INSTRUCTIONS_STORAGE_KEY, JSON.stringify(mergedInstructions))
-
-    // Show success feedback
-    setTagsReset(true)
-    setTimeout(() => setTagsReset(false), 2000)
-  }
-
-  const handleResetTemplates = () => {
-    // Get current templates from localStorage
-    const storedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY)
-    const currentTemplates = storedTemplates ? JSON.parse(storedTemplates) : []
-
-    // Keep only custom templates (user-created)
-    const customTemplates = currentTemplates.filter(t => t.custom === true)
-
-    // Merge factory templates with custom templates (factory first, then custom)
-    const mergedTemplates = [...factoryTemplates, ...customTemplates]
-
-    // Save to localStorage
-    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(mergedTemplates))
-
-    // Show success feedback
-    setTemplatesReset(true)
-    setTimeout(() => setTemplatesReset(false), 2000)
+    setCloudResetLoading(true)
+    try {
+      await settingsApi.resetToDefaults()
+      setCloudResetDone(true)
+      // Reload the page after a short delay to reseed data
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    } catch (err) {
+      console.error('Failed to reset to defaults:', err)
+      alert('Failed to reset: ' + err.message)
+      setCloudResetLoading(false)
+    }
   }
 
   const startRecording = (shortcutId) => {
@@ -301,62 +268,6 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
               </div>
             )}
 
-            {/* Sync Status */}
-            {syncManager && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-100">Sync Status</h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {syncState.status === 'synced' && 'All changes synced to cloud'}
-                      {syncState.status === 'syncing' && 'Syncing your data...'}
-                      {syncState.status === 'offline' && `${syncState.queueSize || 0} changes pending`}
-                      {syncState.status === 'error' && 'Sync error occurred'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {syncState.status === 'synced' && (
-                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                    )}
-                    {syncState.status === 'syncing' && (
-                      <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
-                    )}
-                    {syncState.status === 'offline' && (
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                    )}
-                    {syncState.status === 'error' && (
-                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <Cloud className="w-4 h-4" />
-                  <span>
-                    {syncState.queueSize > 0
-                      ? `${syncState.queueSize} item${syncState.queueSize !== 1 ? 's' : ''} in queue`
-                      : 'Everything up to date'}
-                  </span>
-                </div>
-
-                <Button
-                  onClick={() => syncManager.triggerSync()}
-                  disabled={syncState.status === 'syncing'}
-                  variant="outline"
-                  size="sm"
-                  className="w-full border-blue-500/20 text-blue-400 hover:bg-blue-500/10"
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${syncState.status === 'syncing' ? 'animate-spin' : ''}`} />
-                  {syncState.status === 'syncing' ? 'Syncing...' : 'Sync Now'}
-                </Button>
-
-                {syncState.lastSync && (
-                  <p className="text-xs text-gray-500 text-center">
-                    Last synced: {new Date(syncState.lastSync).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -774,89 +685,51 @@ export function SettingsPage({ onBackHome, onOpenCosts }) {
           </CardContent>
         </Card>
 
-        {/* Tags & Instructions Reset Card */}
+        {/* Reset to Defaults Card */}
         <Card className="bg-[#1a1a1a] border-[#333333]">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                <Tags className="w-5 h-5 text-cyan-500" />
+              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5 text-red-500" />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-xl text-gray-100">Tags & Instructions</CardTitle>
+                <CardTitle className="text-xl text-gray-100">Reset to Defaults</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Reset to factory defaults while keeping your custom tags
+                  Reset all tags, instructions, and templates to factory defaults
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
+            <div className="p-4 bg-[#0a0a0a] rounded-lg border border-red-500/20">
               <div className="text-sm text-gray-300 mb-3">
-                This will restore all factory tags and instructions while preserving any custom tags you've created.
+                This will delete all your current tags, AI instructions, and templates from the cloud and restore them to factory defaults.
               </div>
               <ul className="text-xs text-gray-500 space-y-1 mb-4">
-                <li>• Factory tags will be restored to their original state</li>
-                <li>• Your custom tags (marked with <span className="text-cyan-400">custom</span>) will be kept</li>
-                <li>• Any edits to factory tags will be lost</li>
+                <li>• All tags will be reset to factory defaults</li>
+                <li>• All AI instructions will be reset to factory defaults</li>
+                <li>• All templates will be reset to factory defaults</li>
+                <li className="text-red-400">• Custom items you created will be deleted</li>
               </ul>
               <Button
-                onClick={handleResetTagsAndInstructions}
-                className={`${tagsReset ? 'bg-green-600 hover:bg-green-600' : 'bg-cyan-600 hover:bg-cyan-500'} text-white`}
+                onClick={handleResetToDefaults}
+                disabled={cloudResetLoading || cloudResetDone}
+                className={`${cloudResetDone ? 'bg-green-600 hover:bg-green-600' : 'bg-red-600 hover:bg-red-500'} text-white`}
               >
-                {tagsReset ? (
+                {cloudResetDone ? (
                   <>
                     <Check className="w-4 h-4 mr-2" />
-                    Reset Complete
+                    Reset Complete - Reloading...
+                  </>
+                ) : cloudResetLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Resetting...
                   </>
                 ) : (
                   <>
                     <RotateCcw className="w-4 h-4 mr-2" />
-                    Reset Tags & Instructions
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Prompt Templates Reset Card */}
-        <Card className="bg-[#1a1a1a] border-[#333333]">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-purple-500" />
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-xl text-gray-100">Prompt Templates</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Reset to factory defaults while keeping your custom templates
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-[#0a0a0a] rounded-lg border border-[#333333]">
-              <div className="text-sm text-gray-300 mb-3">
-                This will restore all factory prompt templates while preserving any custom templates you've created.
-              </div>
-              <ul className="text-xs text-gray-500 space-y-1 mb-4">
-                <li>• Factory templates will be restored to their original state</li>
-                <li>• Your custom templates (marked with <span className="text-purple-400">custom</span>) will be kept</li>
-                <li>• Any edits to factory templates will be lost</li>
-              </ul>
-              <Button
-                onClick={handleResetTemplates}
-                className={`${templatesReset ? 'bg-green-600 hover:bg-green-600' : 'bg-purple-600 hover:bg-purple-500'} text-white`}
-              >
-                {templatesReset ? (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Reset Complete
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Reset Prompt Templates
+                    Reset All to Defaults
                   </>
                 )}
               </Button>

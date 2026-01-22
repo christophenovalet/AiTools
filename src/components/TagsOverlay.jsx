@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { X, RefreshCw } from 'lucide-react'
+import { tagsApi, instructionsApi } from '@/lib/api'
 import tagsData from '@/data/tags.json'
 import aiInstructionsData from '@/data/ai-instructions.json'
-
-const TAGS_STORAGE_KEY = 'textbuilder-tags'
-const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
 
 // Regex-based fuzzy matching: converts filter to pattern like "c.*o.*n.*s"
 // Returns match score (lower = better) or null if no match
@@ -24,18 +22,37 @@ function getMatchScore(filter, target) {
 
 export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
   const [filter, setFilter] = useState('')
+  const [tags, setTags] = useState([])
+  const [aiInstructions, setAiInstructions] = useState([])
+  const [loading, setLoading] = useState(true)
   const filterRef = useRef(null)
   const overlayRef = useRef(null)
 
-  const tags = (() => {
-    const stored = localStorage.getItem(TAGS_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : tagsData
-  })()
+  // Load data from API on mount
+  useEffect(() => {
+    loadData()
+  }, [])
 
-  const aiInstructions = (() => {
-    const stored = localStorage.getItem(AI_INSTRUCTIONS_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : aiInstructionsData
-  })()
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [tagsResult, instructionsResult] = await Promise.all([
+        tagsApi.list(),
+        instructionsApi.list()
+      ])
+
+      // Use API data, or fallback to JSON if empty (seeding happens in TagsLibrary)
+      setTags(tagsResult.length > 0 ? tagsResult : tagsData)
+      setAiInstructions(instructionsResult.length > 0 ? instructionsResult : aiInstructionsData)
+    } catch (err) {
+      console.error('Failed to load tags/instructions:', err)
+      // Fallback to JSON data if API fails
+      setTags(tagsData)
+      setAiInstructions(aiInstructionsData)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredTags = tags
     .map(tag => ({ ...tag, score: getMatchScore(filter, tag.name) }))
@@ -49,8 +66,10 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
 
   // Focus filter on mount
   useEffect(() => {
-    filterRef.current?.focus()
-  }, [])
+    if (!loading) {
+      filterRef.current?.focus()
+    }
+  }, [loading])
 
   // Handle ESC key and Ctrl+Shift+Space to close
   useEffect(() => {
@@ -93,6 +112,21 @@ export function TagsOverlay({ onClose, onInsertTag, onInsertInstruction }) {
         handleInstructionClick(filteredInstructions[0])
       }
     }
+  }
+
+  if (loading) {
+    return (
+      <div
+        ref={overlayRef}
+        onClick={handleOverlayClick}
+        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      >
+        <div className="bg-[#1a1a1a] rounded-xl border border-gray-700 p-8 flex flex-col items-center">
+          <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
+          <span className="text-gray-400 mt-3">Loading tags...</span>
+        </div>
+      </div>
+    )
   }
 
   return (

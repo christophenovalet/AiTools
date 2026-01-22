@@ -1,26 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Copy, Trash2, Edit2, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Copy, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { Button } from './ui/button'
+import { templatesApi } from '@/lib/api'
 import factoryTemplates from '@/data/templates.json'
 
-const TEMPLATES_STORAGE_KEY = 'textbuilder-templates'
-
-// Load templates from localStorage or use factory defaults
-const loadTemplates = () => {
-  const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY)
-  if (stored) {
-    return JSON.parse(stored)
-  }
-  return factoryTemplates
-}
-
-// Save templates to localStorage
-const saveTemplates = (templates) => {
-  localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates))
-}
-
 export function TemplateLibrary({ onInsertTemplate }) {
-  const [templates, setTemplates] = useState(loadTemplates)
+  const [templates, setTemplates] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [newTemplate, setNewTemplate] = useState({ title: '', text: '' })
@@ -28,10 +15,49 @@ export function TemplateLibrary({ onInsertTemplate }) {
   const [searchFilter, setSearchFilter] = useState('')
   const [expandedIds, setExpandedIds] = useState(new Set())
 
-  // Save to localStorage whenever templates change
+  // Load data from API on mount
   useEffect(() => {
-    saveTemplates(templates)
-  }, [templates])
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const templatesResult = await templatesApi.list()
+
+      // If no templates in database, seed with defaults
+      if (templatesResult.length === 0) {
+        await seedDefaultTemplates()
+        const seededTemplates = await templatesApi.list()
+        setTemplates(seededTemplates)
+      } else {
+        setTemplates(templatesResult)
+      }
+    } catch (err) {
+      console.error('Failed to load templates:', err)
+      setError(err.message)
+      // Fallback to JSON data if API fails
+      setTemplates(factoryTemplates)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const seedDefaultTemplates = async () => {
+    console.log('Seeding default templates...')
+    for (const template of factoryTemplates) {
+      try {
+        await templatesApi.create({
+          title: template.title,
+          text: template.text,
+          category: template.category || 'template'
+        })
+      } catch (err) {
+        console.error('Failed to seed template:', template.title, err)
+      }
+    }
+  }
 
   const filteredTemplates = templates
     .filter(t => activeFilter === 'all' ? true : ((t.category ?? 'template') === activeFilter))
@@ -40,29 +66,45 @@ export function TemplateLibrary({ onInsertTemplate }) {
       t.text.toLowerCase().includes(searchFilter.toLowerCase())
     )
 
-  const handleAddTemplate = () => {
+  const handleAddTemplate = async () => {
     if (newTemplate.title.trim() && newTemplate.text.trim()) {
-      setTemplates([...templates, {
-        id: Date.now(),
-        title: newTemplate.title,
-        text: newTemplate.text,
-        category: 'template',
-        custom: true
-      }])
-      setNewTemplate({ title: '', text: '' })
-      setIsAdding(false)
+      try {
+        const created = await templatesApi.create({
+          title: newTemplate.title.trim(),
+          text: newTemplate.text.trim(),
+          category: 'template'
+        })
+        setTemplates([...templates, { ...created, isCustom: true }])
+        setNewTemplate({ title: '', text: '' })
+        setIsAdding(false)
+      } catch (err) {
+        console.error('Failed to create template:', err)
+        alert('Failed to create template: ' + err.message)
+      }
     }
   }
 
-  const handleEditTemplate = (id, title, text) => {
-    setTemplates(templates.map(t =>
-      t.id === id ? { ...t, title, text } : t
-    ))
-    setEditingId(null)
+  const handleEditTemplate = async (id, title, text) => {
+    try {
+      await templatesApi.update(id, { title, text })
+      setTemplates(templates.map(t =>
+        t.id === id ? { ...t, title, text } : t
+      ))
+      setEditingId(null)
+    } catch (err) {
+      console.error('Failed to update template:', err)
+      alert('Failed to update template: ' + err.message)
+    }
   }
 
-  const handleDeleteTemplate = (id) => {
-    setTemplates(templates.filter(t => t.id !== id))
+  const handleDeleteTemplate = async (id) => {
+    try {
+      await templatesApi.delete(id)
+      setTemplates(templates.filter(t => t.id !== id))
+    } catch (err) {
+      console.error('Failed to delete template:', err)
+      alert('Failed to delete template: ' + err.message)
+    }
   }
 
   const handleCopyTemplate = (text) => {
@@ -91,6 +133,26 @@ export function TemplateLibrary({ onInsertTemplate }) {
   const getTruncatedText = (text) => {
     const lines = text.split('\n')
     return lines.slice(0, 3).join('\n')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-purple-500/50 items-center justify-center">
+        <RefreshCw className="w-6 h-6 text-purple-400 animate-spin" />
+        <span className="text-gray-400 text-sm mt-2">Loading...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-red-500/50 items-center justify-center p-4">
+        <span className="text-red-400 text-sm text-center">{error}</span>
+        <Button onClick={loadData} size="sm" className="mt-2 bg-purple-500 hover:bg-purple-600">
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (

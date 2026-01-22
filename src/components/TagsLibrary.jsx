@@ -1,21 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Check, X } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, RefreshCw } from 'lucide-react'
 import { Button } from './ui/button'
+import { tagsApi, instructionsApi } from '@/lib/api'
 import tagsData from '@/data/tags.json'
 import aiInstructionsData from '@/data/ai-instructions.json'
 
-const TAGS_STORAGE_KEY = 'textbuilder-tags'
-const AI_INSTRUCTIONS_STORAGE_KEY = 'textbuilder-ai-instructions'
-
 export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
-  const [tags, setTags] = useState(() => {
-    const stored = localStorage.getItem(TAGS_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : tagsData
-  })
-  const [aiInstructions, setAiInstructions] = useState(() => {
-    const stored = localStorage.getItem(AI_INSTRUCTIONS_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : aiInstructionsData
-  })
+  const [tags, setTags] = useState([])
+  const [aiInstructions, setAiInstructions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [isAddingTag, setIsAddingTag] = useState(false)
   const [isAddingInstruction, setIsAddingInstruction] = useState(false)
   const [editingTagId, setEditingTagId] = useState(null)
@@ -24,6 +18,78 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
   const [newInstruction, setNewInstruction] = useState({ name: '', description: '' })
   const [tagFilter, setTagFilter] = useState('')
   const [instructionFilter, setInstructionFilter] = useState('')
+
+  // Load data from API on mount
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [tagsResult, instructionsResult] = await Promise.all([
+        tagsApi.list(),
+        instructionsApi.list()
+      ])
+
+      // If no tags in database, seed with defaults
+      if (tagsResult.length === 0) {
+        await seedDefaultTags()
+        const seededTags = await tagsApi.list()
+        setTags(seededTags)
+      } else {
+        setTags(tagsResult)
+      }
+
+      // If no instructions in database, seed with defaults
+      if (instructionsResult.length === 0) {
+        await seedDefaultInstructions()
+        const seededInstructions = await instructionsApi.list()
+        setAiInstructions(seededInstructions)
+      } else {
+        setAiInstructions(instructionsResult)
+      }
+    } catch (err) {
+      console.error('Failed to load tags/instructions:', err)
+      setError(err.message)
+      // Fallback to JSON data if API fails
+      setTags(tagsData)
+      setAiInstructions(aiInstructionsData)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const seedDefaultTags = async () => {
+    console.log('Seeding default tags...')
+    for (const tag of tagsData) {
+      try {
+        await tagsApi.create({
+          name: tag.name,
+          description: tag.description || '',
+          category: tag.category || 'general',
+          action: tag.action || ''
+        })
+      } catch (err) {
+        console.error('Failed to seed tag:', tag.name, err)
+      }
+    }
+  }
+
+  const seedDefaultInstructions = async () => {
+    console.log('Seeding default AI instructions...')
+    for (const inst of aiInstructionsData) {
+      try {
+        await instructionsApi.create({
+          name: inst.name,
+          description: inst.description || ''
+        })
+      } catch (err) {
+        console.error('Failed to seed instruction:', inst.name, err)
+      }
+    }
+  }
 
   // Sort alphabetically and filter
   const filteredTags = tags
@@ -40,62 +106,93 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
     )
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  // Save to localStorage
-  useEffect(() => {
-    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(tags))
-  }, [tags])
-
-  useEffect(() => {
-    localStorage.setItem(AI_INSTRUCTIONS_STORAGE_KEY, JSON.stringify(aiInstructions))
-  }, [aiInstructions])
-
-  const handleAddTag = () => {
+  const handleAddTag = async () => {
     if (newTag.name.trim()) {
-      setTags([...tags, {
-        id: Date.now(),
-        name: newTag.name.trim(),
-        description: newTag.description.trim(),
-        action: newTag.action.trim(),
-        custom: true
-      }])
-      setNewTag({ name: '', description: '', action: '' })
-      setIsAddingTag(false)
+      try {
+        const created = await tagsApi.create({
+          name: newTag.name.trim(),
+          description: newTag.description.trim(),
+          action: newTag.action.trim(),
+          category: 'custom'
+        })
+        setTags([...tags, { ...created, isCustom: true }])
+        setNewTag({ name: '', description: '', action: '' })
+        setIsAddingTag(false)
+      } catch (err) {
+        console.error('Failed to create tag:', err)
+        alert('Failed to create tag: ' + err.message)
+      }
     }
   }
 
-  const handleAddInstruction = () => {
+  const handleAddInstruction = async () => {
     if (newInstruction.name.trim()) {
-      setAiInstructions([...aiInstructions, {
-        id: Date.now(),
-        name: newInstruction.name.trim(),
-        description: newInstruction.description.trim(),
-        custom: true
-      }])
-      setNewInstruction({ name: '', description: '' })
-      setIsAddingInstruction(false)
+      try {
+        const created = await instructionsApi.create({
+          name: newInstruction.name.trim(),
+          description: newInstruction.description.trim()
+        })
+        setAiInstructions([...aiInstructions, { ...created, isCustom: true }])
+        setNewInstruction({ name: '', description: '' })
+        setIsAddingInstruction(false)
+      } catch (err) {
+        console.error('Failed to create instruction:', err)
+        alert('Failed to create instruction: ' + err.message)
+      }
     }
   }
 
-  const handleEditTag = (id, name, description, action) => {
-    setTags(tags.map(t =>
-      t.id === id ? { ...t, name: name.trim(), description: description.trim(), action: (action || '').trim() } : t
-    ))
-    setEditingTagId(null)
+  const handleEditTag = async (id, name, description, action) => {
+    try {
+      await tagsApi.update(id, {
+        name: name.trim(),
+        description: description.trim(),
+        action: (action || '').trim()
+      })
+      setTags(tags.map(t =>
+        t.id === id ? { ...t, name: name.trim(), description: description.trim(), action: (action || '').trim() } : t
+      ))
+      setEditingTagId(null)
+    } catch (err) {
+      console.error('Failed to update tag:', err)
+      alert('Failed to update tag: ' + err.message)
+    }
   }
 
-  const handleEditInstruction = (id, name, description) => {
-    setAiInstructions(aiInstructions.map(i =>
-      i.id === id ? { ...i, name: name.trim(), description: description.trim() } : i
-    ))
-    setEditingInstructionId(null)
+  const handleEditInstruction = async (id, name, description) => {
+    try {
+      await instructionsApi.update(id, {
+        name: name.trim(),
+        description: description.trim()
+      })
+      setAiInstructions(aiInstructions.map(i =>
+        i.id === id ? { ...i, name: name.trim(), description: description.trim() } : i
+      ))
+      setEditingInstructionId(null)
+    } catch (err) {
+      console.error('Failed to update instruction:', err)
+      alert('Failed to update instruction: ' + err.message)
+    }
   }
 
-  const handleDeleteTag = (id) => {
-    setTags(tags.filter(t => t.id !== id))
+  const handleDeleteTag = async (id) => {
+    try {
+      await tagsApi.delete(id)
+      setTags(tags.filter(t => t.id !== id))
+    } catch (err) {
+      console.error('Failed to delete tag:', err)
+      alert('Failed to delete tag: ' + err.message)
+    }
   }
 
-  const handleDeleteInstruction = (id) => {
-    setAiInstructions(aiInstructions.filter(i => i.id !== id))
+  const handleDeleteInstruction = async (id) => {
+    try {
+      await instructionsApi.delete(id)
+      setAiInstructions(aiInstructions.filter(i => i.id !== id))
+    } catch (err) {
+      console.error('Failed to delete instruction:', err)
+      alert('Failed to delete instruction: ' + err.message)
+    }
   }
 
   const renderItem = (item, isInstruction = false) => {
@@ -266,6 +363,26 @@ export function TagsLibrary({ onInsertTag, onInsertInstruction }) {
             <X className="w-3 h-3" />
           </Button>
         </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-cyan-500/50 items-center justify-center">
+        <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin" />
+        <span className="text-gray-400 text-sm mt-2">Loading...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-red-500/50 items-center justify-center p-4">
+        <span className="text-red-400 text-sm text-center">{error}</span>
+        <Button onClick={loadData} size="sm" className="mt-2 bg-cyan-500 hover:bg-cyan-600">
+          Retry
+        </Button>
       </div>
     )
   }
