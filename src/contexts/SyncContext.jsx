@@ -60,16 +60,20 @@ export function SyncProvider({ children }) {
       // Auto-sync on startup if migration is complete
       const migrationComplete = localStorage.getItem('sync_migration_complete');
       if (migrationComplete && navigator.onLine) {
-        console.log('Auto-syncing from cloud on startup...');
-        manager.performInitialSync()
-          .then(() => {
+        // Small delay to ensure auth is fully initialized
+        setTimeout(async () => {
+          console.log('Auto-syncing from cloud on startup...');
+          try {
+            await manager.performInitialSync();
             console.log('Startup sync complete');
             // Dispatch event so components can refresh their data
             window.dispatchEvent(new CustomEvent('sync-complete'));
-          })
-          .catch(err => {
-            console.error('Startup sync failed:', err);
-          });
+          } catch (err) {
+            console.warn('Startup sync failed (will use local data):', err.message);
+            // Don't show error to user - local data still works
+            // They can manually refresh if needed
+          }
+        }, 500);
       }
 
       // Cleanup on unmount or user change

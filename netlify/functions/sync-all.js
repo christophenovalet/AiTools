@@ -85,6 +85,11 @@ export const handler = async (event) => {
     }, 200, {}, origin);
   } catch (error) {
     console.error('Sync all error:', error);
-    return errorResponse(500, error.message || 'Sync failed', null, origin);
+    // Return 401 for auth errors so frontend can refresh token
+    const isAuthError = error.message?.includes('Authentication failed') ||
+                        error.message?.includes('Token expired') ||
+                        error.message?.includes('Invalid token');
+    const statusCode = isAuthError ? 401 : 500;
+    return errorResponse(statusCode, error.message || 'Sync failed', null, origin);
   }
 };
