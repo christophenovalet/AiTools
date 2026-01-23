@@ -429,8 +429,12 @@ export function MockupAnnotator({ isOpen, onClose }) {
   const [textSize, setTextSize] = useState(() => parseInt(localStorage.getItem('annotator-text-size')) || 16)
   const updateTextSize = (size) => { setTextSize(size); localStorage.setItem('annotator-text-size', size) }
 
-  // Foreground color
-  const [fgColor, setFgColor] = useState('#ffffff')
+  // Pen width (persisted)
+  const [penWidth, setPenWidth] = useState(() => parseInt(localStorage.getItem('annotator-pen-width')) || 2)
+  const updatePenWidth = (w) => { setPenWidth(w); localStorage.setItem('annotator-pen-width', w) }
+
+  // Foreground color (persisted)
+  const [fgColor, setFgColor] = useState(() => localStorage.getItem('annotator-fg-color') || '#ffffff')
   const fgColorInputRef = useRef(null)
 
   // Context menu
@@ -580,7 +584,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
               ctx.lineWidth = obj.strokeWidth || 2
               ctx.lineCap = 'round'
               ctx.lineJoin = 'round'
+              if (obj.dashed) ctx.setLineDash([5, 5])
               ctx.stroke()
+              ctx.setLineDash([])
             }
             break
 
@@ -635,7 +641,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
         }
 
         // Draw selection box (skip for images, labels, arrows, and text)
-        const skipSelection = ['image', 'label', 'text', 'arrow', 'dashed_arrow', 'elbow_arrow', 'curved_arrow', 'bidirectional', 'rectangle', 'ellipse']
+        const skipSelection = ['image', 'label', 'text', 'arrow', 'dashed_arrow', 'elbow_arrow', 'curved_arrow', 'bidirectional', 'rectangle', 'ellipse', 'pen']
         if (obj.id === selectedObjectId && !skipSelection.includes(obj.type) && activeTool !== TOOLS.TRANSFORM) {
           ctx.strokeStyle = '#00bfff'
           ctx.lineWidth = 2 / zoom
@@ -1255,6 +1261,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
         if (e.altKey) {
           // Alt+drag: create a copy and drag the copy
           const copy = { ...clickedObject, id: generateId() }
+          if (copy.points) copy.points = copy.points.map(p => ({ ...p }))
           setObjects(prev => [...prev, copy])
           setSelectedObjectId(copy.id)
           setSelectedLayerIds([copy.layerId])
@@ -1636,8 +1643,8 @@ export function MockupAnnotator({ isOpen, onClose }) {
             type: 'pen',
             layerId: createLayerForObject('Pen'),
             points: currentPath,
-            strokeColor: '#ffffff',
-            strokeWidth: 2,
+            strokeColor: fgColor,
+            strokeWidth: penWidth,
             sequenceNumber: sequenceMode ? nextSequenceNumber : undefined,
             priority: 'normal'
           }
@@ -1673,7 +1680,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     setIsDrawing(false)
     setDrawStart(null)
     setCurrentPath([])
-  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerIds, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom, transformHandle])
+  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerIds, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom, transformHandle, fgColor, penWidth])
 
   // Double click for text editing
   const handleDoubleClick = useCallback((e) => {
@@ -2547,7 +2554,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
               ctx.lineWidth = obj.strokeWidth || 2
               ctx.lineCap = 'round'
               ctx.lineJoin = 'round'
+              if (obj.dashed) ctx.setLineDash([5, 5])
               ctx.stroke()
+              ctx.setLineDash([])
             }
             break
           case 'text': {
@@ -2635,7 +2644,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
             ref={fgColorInputRef}
             type="color"
             value={fgColor}
-            onChange={(e) => setFgColor(e.target.value)}
+            onChange={(e) => { setFgColor(e.target.value); localStorage.setItem('annotator-fg-color', e.target.value) }}
             className="sr-only"
           />
           <Button onClick={copyCanvasToClipboard} variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300">
