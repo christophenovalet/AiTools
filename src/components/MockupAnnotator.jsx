@@ -51,7 +51,7 @@ const getCanvasPoint = (e, canvasRef, offset, zoom) => {
 }
 
 // ================== LAYER PANEL COMPONENT ==================
-const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility, onToggleLock, onDeleteLayer, onReorderLayers, onRenameLayer, smartFillOnDelete, onToggleSmartFill }) => {
+const LayerPanel = ({ layers, selectedLayerIds, onSelectLayer, onToggleVisibility, onToggleLock, onDeleteLayer, onReorderLayers, onRenameLayer, smartFillOnDelete, onToggleSmartFill }) => {
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
 
@@ -79,9 +79,9 @@ const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility
         {[...layers].reverse().map((layer, index) => (
           <div
             key={layer.id}
-            onClick={() => onSelectLayer(layer.id)}
+            onClick={(e) => onSelectLayer(layer.id, e)}
             className={`group flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer text-sm ${
-              selectedLayerId === layer.id ? 'bg-blue-500/30 border border-blue-500' : 'hover:bg-gray-800'
+              selectedLayerIds.includes(layer.id) ? 'bg-blue-500/30 border border-blue-500' : 'hover:bg-gray-800'
             }`}
           >
             <button
@@ -223,7 +223,7 @@ const PropertiesPanel = ({ selectedObject, onUpdateObject }) => {
         <div className="space-y-1">
           <label className="text-xs text-gray-400">Stroke Width</label>
           <div className="flex gap-1">
-            {[2, 3, 4, 6].map(w => (
+            {[1, 2, 3, 4, 6].map(w => (
               <button
                 key={w}
                 onClick={() => onUpdateObject({ ...selectedObject, strokeWidth: w })}
@@ -232,6 +232,27 @@ const PropertiesPanel = ({ selectedObject, onUpdateObject }) => {
                 {w}px
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stroke Style */}
+      {selectedObject.strokeWidth !== undefined && (
+        <div className="space-y-1">
+          <label className="text-xs text-gray-400">Stroke Style</label>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onUpdateObject({ ...selectedObject, dashed: false })}
+              className={`px-2 py-1 text-xs rounded ${!selectedObject.dashed ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+            >
+              Solid
+            </button>
+            <button
+              onClick={() => onUpdateObject({ ...selectedObject, dashed: true })}
+              className={`px-2 py-1 text-xs rounded ${selectedObject.dashed ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+            >
+              Dotted
+            </button>
           </div>
         </div>
       )}
@@ -313,7 +334,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
   // Layer state
   const [layers, setLayers] = useState([])
-  const [selectedLayerId, setSelectedLayerId] = useState(null)
+  const [selectedLayerIds, setSelectedLayerIds] = useState([])
 
   // Object state
   const [objects, setObjects] = useState([])
@@ -661,11 +682,14 @@ export function MockupAnnotator({ isOpen, onClose }) {
     const headLength = 15
     const angle = Math.atan2(y2 - y1, x2 - x1)
     const width = strokeWidth || 3
+    // Shorten line so it ends at the base of the arrowhead
+    const lineEndX = x2 - (headLength - 3) * Math.cos(angle)
+    const lineEndY = y2 - (headLength - 3) * Math.sin(angle)
 
     drawArrowOutline(ctx, (c, overrideColor, isBorder) => {
       c.beginPath()
       c.moveTo(x1, y1)
-      c.lineTo(x2, y2)
+      c.lineTo(lineEndX, lineEndY)
       c.strokeStyle = overrideColor || strokeColor || '#EF4444'
       c.lineWidth = isBorder ? width + 2 : width
       if (dashed) c.setLineDash([8, 4])
@@ -698,13 +722,15 @@ export function MockupAnnotator({ isOpen, onClose }) {
     const midX = (x1 + x2) / 2
     const headLength = 15
     const width = strokeWidth || 3
+    const finalAngleElbow = x2 > midX ? 0 : Math.PI
+    const lineEndX = x2 - (headLength - 3) * Math.cos(finalAngleElbow)
 
     drawArrowOutline(ctx, (c, overrideColor, isBorder) => {
       c.beginPath()
       c.moveTo(x1, y1)
       c.lineTo(midX, y1)
       c.lineTo(midX, y2)
-      c.lineTo(x2, y2)
+      c.lineTo(lineEndX, y2)
       c.strokeStyle = overrideColor || strokeColor || '#3B82F6'
       c.lineWidth = isBorder ? width + 2 : width
       c.stroke()
@@ -742,11 +768,14 @@ export function MockupAnnotator({ isOpen, onClose }) {
     const dx = 2 * (1 - t) * (cpX - x1) + 2 * t * (x2 - cpX)
     const dy = 2 * (1 - t) * (cpY - y1) + 2 * t * (y2 - cpY)
     const angle = Math.atan2(dy, dx)
+    // Shorten curve endpoint so line doesn't poke through arrowhead
+    const curveEndX = x2 - (headLength - 3) * Math.cos(angle)
+    const curveEndY = y2 - (headLength - 3) * Math.sin(angle)
 
     drawArrowOutline(ctx, (c, overrideColor, isBorder) => {
       c.beginPath()
       c.moveTo(x1, y1)
-      c.quadraticCurveTo(cpX, cpY, x2, y2)
+      c.quadraticCurveTo(cpX, cpY, curveEndX, curveEndY)
       c.strokeStyle = overrideColor || strokeColor || '#22C55E'
       c.lineWidth = isBorder ? width + 2 : width
       c.stroke()
@@ -778,11 +807,16 @@ export function MockupAnnotator({ isOpen, onClose }) {
     const angle = Math.atan2(y2 - y1, x2 - x1)
     const reverseAngle = angle + Math.PI
     const width = strokeWidth || 3
+    // Shorten line from both ends
+    const lineStartX = x1 + (headLength - 3) * Math.cos(angle)
+    const lineStartY = y1 + (headLength - 3) * Math.sin(angle)
+    const lineEndX = x2 - (headLength - 3) * Math.cos(angle)
+    const lineEndY = y2 - (headLength - 3) * Math.sin(angle)
 
     drawArrowOutline(ctx, (c, overrideColor, isBorder) => {
       c.beginPath()
-      c.moveTo(x1, y1)
-      c.lineTo(x2, y2)
+      c.moveTo(lineStartX, lineStartY)
+      c.lineTo(lineEndX, lineEndY)
       c.strokeStyle = overrideColor || strokeColor || '#A855F7'
       c.lineWidth = isBorder ? width + 2 : width
       c.stroke()
@@ -990,7 +1024,14 @@ export function MockupAnnotator({ isOpen, onClose }) {
       })
 
       if (clickedObject) {
-        setSelectedObjectId(clickedObject.id)
+        if (e.altKey) {
+          // Alt+drag: create a copy and drag the copy
+          const copy = { ...clickedObject, id: generateId() }
+          setObjects(prev => [...prev, copy])
+          setSelectedObjectId(copy.id)
+        } else {
+          setSelectedObjectId(clickedObject.id)
+        }
         setIsDraggingObject(true)
         // Store offset from click to object origin
         const bounds = getObjectBounds(clickedObject)
@@ -1046,7 +1087,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       setLabelMenuPosition({ x: e.clientX, y: e.clientY })
       setShowLabelMenu(true)
     }
-  }, [activeTool, objects, offset, zoom, selectedLayerId, sequenceMode, nextSequenceNumber, currentPath])
+  }, [activeTool, objects, offset, zoom, selectedLayerIds, sequenceMode, nextSequenceNumber, currentPath])
 
   const handleMouseMove = useCallback((e) => {
     if (isPanning) {
@@ -1102,6 +1143,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
     }
 
     if (isDraggingObject) {
+      if (e.shiftKey && selectedObjectId) {
+        // Shift held on release: delete the dragged object and its layer
+        deleteObject(selectedObjectId)
+      }
       setIsDraggingObject(false)
       return
     }
@@ -1109,7 +1154,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     if (!isDrawing || !drawStart) return
 
     const point = getCanvasPoint(e, canvasRef, offset, zoom)
-    const layer = layers.find(l => l.id === selectedLayerId)
+    const layer = layers.find(l => selectedLayerIds.includes(l.id))
 
     if (layer?.locked) {
       setIsDrawing(false)
@@ -1294,7 +1339,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     setIsDrawing(false)
     setDrawStart(null)
     setCurrentPath([])
-  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerId, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom])
+  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerIds, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom])
 
   // Double click for text editing
   const handleDoubleClick = useCallback((e) => {
@@ -1369,7 +1414,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
             setLayers([...layers, newLayer])
             setObjects([...objects, newImage])
-            setSelectedLayerId(imageLayerId)
+            setSelectedLayerIds([imageLayerId])
           }
           img.src = URL.createObjectURL(blob)
           break
@@ -1434,10 +1479,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
         if (e.key === 's' || e.key === 'S') setSequenceMode(prev => !prev)
       }
 
-      // Delete selected object
+      // Delete selected object and its layer
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObjectId) {
-        setObjects(prev => prev.filter(obj => obj.id !== selectedObjectId))
-        setSelectedObjectId(null)
+        deleteObject(selectedObjectId)
       }
 
       // Copy/Paste
@@ -1484,7 +1528,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       locked: false
     }
     setLayers(prev => [...prev, newLayer])
-    setSelectedLayerId(layerId)
+    setSelectedLayerIds([layerId])
     return layerId
   }
 
@@ -1712,7 +1756,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
           newCutoutObject
         ])
 
-        setSelectedLayerId(cutoutLayerId)
+        setSelectedLayerIds([cutoutLayerId])
       }
       cutImg.src = cutCanvas.toDataURL('image/png')
     }
@@ -1854,9 +1898,19 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
     setLayers(prev => prev.filter(l => l.id !== layerId))
     setObjects(prev => prev.filter(obj => obj.layerId !== layerId))
-    if (selectedLayerId === layerId) {
-      setSelectedLayerId(layers.find(l => l.id !== layerId)?.id || null)
+    setSelectedLayerIds(prev => prev.filter(id => id !== layerId))
+  }
+
+  const deleteObject = (objectId) => {
+    const obj = objects.find(o => o.id === objectId)
+    if (!obj) return
+    const layerId = obj.layerId
+    setObjects(prev => prev.filter(o => o.id !== objectId))
+    if (layerId) {
+      setLayers(prev => prev.filter(l => l.id !== layerId))
+      setSelectedLayerIds(prev => prev.filter(id => id !== layerId))
     }
+    setSelectedObjectId(null)
   }
 
   const toggleLayerVisibility = (layerId) => {
@@ -2116,22 +2170,19 @@ export function MockupAnnotator({ isOpen, onClose }) {
             <Redo2 className="h-4 w-4" />
           </Button>
           <div className="w-px h-5 bg-gray-700" />
-          <div className="flex items-center gap-1" title="Foreground color">
-            <button
-              onClick={() => fgColorInputRef.current?.click()}
-              className="w-6 h-6 rounded border-2 border-gray-500 hover:border-white cursor-pointer"
-              style={{ backgroundColor: fgColor }}
-            />
-            <input
-              ref={fgColorInputRef}
-              type="color"
-              value={fgColor}
-              onChange={(e) => setFgColor(e.target.value)}
-              className="sr-only"
-            />
-            <span className="text-xs text-gray-500">FG</span>
-          </div>
-          <div className="w-px h-5 bg-gray-700" />
+          <button
+            onClick={() => fgColorInputRef.current?.click()}
+            className="w-6 h-6 rounded border-2 border-gray-500 hover:border-white cursor-pointer"
+            style={{ backgroundColor: fgColor }}
+            title="Foreground color"
+          />
+          <input
+            ref={fgColorInputRef}
+            type="color"
+            value={fgColor}
+            onChange={(e) => setFgColor(e.target.value)}
+            className="sr-only"
+          />
           <Button
             onClick={() => setSequenceMode(!sequenceMode)}
             variant={sequenceMode ? 'default' : 'ghost'}
@@ -2271,8 +2322,29 @@ export function MockupAnnotator({ isOpen, onClose }) {
           {/* Layer Panel */}
           <LayerPanel
             layers={layers}
-            selectedLayerId={selectedLayerId}
-            onSelectLayer={setSelectedLayerId}
+            selectedLayerIds={selectedLayerIds}
+            onSelectLayer={(layerId, e) => {
+              if (e.ctrlKey || e.metaKey) {
+                // Ctrl+click: toggle individual layer
+                setSelectedLayerIds(prev =>
+                  prev.includes(layerId)
+                    ? prev.filter(id => id !== layerId)
+                    : [...prev, layerId]
+                )
+              } else if (e.shiftKey && selectedLayerIds.length > 0) {
+                // Shift+click: range select
+                const lastSelected = selectedLayerIds[selectedLayerIds.length - 1]
+                const lastIdx = layers.findIndex(l => l.id === lastSelected)
+                const currIdx = layers.findIndex(l => l.id === layerId)
+                const start = Math.min(lastIdx, currIdx)
+                const end = Math.max(lastIdx, currIdx)
+                const range = layers.slice(start, end + 1).map(l => l.id)
+                setSelectedLayerIds(prev => [...new Set([...prev, ...range])])
+              } else {
+                // Normal click: select only this layer
+                setSelectedLayerIds([layerId])
+              }
+            }}
             onToggleVisibility={toggleLayerVisibility}
             onToggleLock={toggleLayerLock}
             onDeleteLayer={deleteLayer}
@@ -2319,7 +2391,12 @@ export function MockupAnnotator({ isOpen, onClose }) {
             <p>• Scroll to zoom, drag empty space to pan</p>
             <p>• Press S to toggle sequence mode</p>
             <p>• Ctrl+G to generate prompt</p>
+            <p>• Ctrl+C to copy canvas to clipboard</p>
+            <p>• Cmd+G to paste image in Claude Code</p>
             <p>• Del to delete selected object</p>
+            <p>• Alt+drag to duplicate object</p>
+            <p>• Shift+release to delete dragged object</p>
+            <p>• Ctrl+click / Shift+click for multi-select layers</p>
           </div>
         </div>
       </div>
@@ -2347,8 +2424,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
             <button
               onClick={() => {
                 if (selectedObjectId) {
-                  setObjects(prev => prev.filter(obj => obj.id !== selectedObjectId))
-                  setSelectedObjectId(null)
+                  deleteObject(selectedObjectId)
                 }
                 setShowContextMenu(false)
               }}
