@@ -51,7 +51,7 @@ const getCanvasPoint = (e, canvasRef, offset, zoom) => {
 }
 
 // ================== LAYER PANEL COMPONENT ==================
-const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility, onToggleLock, onDeleteLayer, onReorderLayers, onRenameLayer }) => {
+const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility, onToggleLock, onDeleteLayer, onReorderLayers, onRenameLayer, smartFillOnDelete, onToggleSmartFill }) => {
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
 
@@ -80,7 +80,7 @@ const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility
           <div
             key={layer.id}
             onClick={() => onSelectLayer(layer.id)}
-            className={`flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer text-sm ${
+            className={`group flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer text-sm ${
               selectedLayerId === layer.id ? 'bg-blue-500/30 border border-blue-500' : 'hover:bg-gray-800'
             }`}
           >
@@ -129,6 +129,15 @@ const LayerPanel = ({ layers, selectedLayerId, onSelectLayer, onToggleVisibility
           </div>
         ))}
       </div>
+      <label className="flex items-center gap-2 px-1 pt-2 border-t border-gray-700 mt-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={smartFillOnDelete}
+          onChange={() => onToggleSmartFill(!smartFillOnDelete)}
+          className="w-3 h-3 accent-blue-500"
+        />
+        <span className="text-xs text-gray-400">Smart fill on delete</span>
+      </label>
     </div>
   )
 }
@@ -360,6 +369,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
   // Sequence mode
   const [sequenceMode, setSequenceMode] = useState(false)
   const [nextSequenceNumber, setNextSequenceNumber] = useState(1)
+
+  // Smart fill on delete
+  const [smartFillOnDelete, setSmartFillOnDelete] = useState(true)
 
   // Foreground color
   const [fgColor, setFgColor] = useState('#ffffff')
@@ -1374,6 +1386,12 @@ export function MockupAnnotator({ isOpen, onClose }) {
     if (!isOpen) return
 
     const handleKeyDown = (e) => {
+      // Don't capture shortcuts when typing in any text input
+      const activeEl = document.activeElement
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return
+      }
+
       // Don't capture if editing text
       if (editingTextId) {
         if (e.key === 'Escape') {
@@ -1741,13 +1759,17 @@ export function MockupAnnotator({ isOpen, onClose }) {
       y: p.y - targetImage.y
     }))
 
+    const fillColor = smartFillOnDelete
+      ? sampleBackgroundColor(ctx, localPath, targetImage.width, targetImage.height)
+      : fgColor
+
     ctx.beginPath()
     ctx.moveTo(localPath[0].x, localPath[0].y)
     for (let i = 1; i < localPath.length; i++) {
       ctx.lineTo(localPath[i].x, localPath[i].y)
     }
     ctx.closePath()
-    ctx.fillStyle = fgColor
+    ctx.fillStyle = fillColor
     ctx.fill()
 
     const newImg = new window.Image()
@@ -1767,6 +1789,69 @@ export function MockupAnnotator({ isOpen, onClose }) {
   }
 
   const deleteLayer = (layerId) => {
+    if (smartFillOnDelete) {
+      // Find objects in the layer being deleted
+      const deletedObjects = objects.filter(obj => obj.layerId === layerId)
+      // Find image objects in other layers to paint over
+      const imageObjects = objects.filter(obj => obj.type === 'image' && obj.image && obj.layerId !== layerId)
+
+      for (const delObj of deletedObjects) {
+        // Determine the bounds of the deleted object
+        const bounds = delObj.type === 'image'
+          ? { x: delObj.x, y: delObj.y, width: delObj.width, height: delObj.height }
+          : delObj.x !== undefined && delObj.width
+            ? { x: delObj.x, y: delObj.y, width: delObj.width, height: delObj.height }
+            : null
+        if (!bounds) continue
+
+        // Find the underlying image that overlaps
+        const targetImage = imageObjects.find(img =>
+          img.x < bounds.x + bounds.width &&
+          img.x + img.width > bounds.x &&
+          img.y < bounds.y + bounds.height &&
+          img.y + img.height > bounds.y
+        )
+        if (!targetImage) continue
+
+        // Build a rectangular path in image-local coordinates
+        const localPath = [
+          { x: bounds.x - targetImage.x, y: bounds.y - targetImage.y },
+          { x: bounds.x - targetImage.x + bounds.width, y: bounds.y - targetImage.y },
+          { x: bounds.x - targetImage.x + bounds.width, y: bounds.y - targetImage.y + bounds.height },
+          { x: bounds.x - targetImage.x, y: bounds.y - targetImage.y + bounds.height }
+        ]
+
+        // Create canvas from the target image
+        const canvas = document.createElement('canvas')
+        canvas.width = targetImage.width
+        canvas.height = targetImage.height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(targetImage.image, 0, 0, targetImage.width, targetImage.height)
+
+        // Fill the area with smart background color
+        const fillColor = sampleBackgroundColor(ctx, localPath, targetImage.width, targetImage.height)
+        ctx.save()
+        ctx.beginPath()
+        ctx.moveTo(localPath[0].x, localPath[0].y)
+        for (let i = 1; i < localPath.length; i++) {
+          ctx.lineTo(localPath[i].x, localPath[i].y)
+        }
+        ctx.closePath()
+        ctx.fillStyle = fillColor
+        ctx.fill()
+        ctx.restore()
+
+        // Update the target image
+        const newImg = new window.Image()
+        newImg.onload = () => {
+          setObjects(prev => prev.map(obj =>
+            obj.id === targetImage.id ? { ...obj, image: newImg } : obj
+          ))
+        }
+        newImg.src = canvas.toDataURL('image/png')
+      }
+    }
+
     setLayers(prev => prev.filter(l => l.id !== layerId))
     setObjects(prev => prev.filter(obj => obj.layerId !== layerId))
     if (selectedLayerId === layerId) {
@@ -2160,12 +2245,16 @@ export function MockupAnnotator({ isOpen, onClose }) {
                 value={editingTextValue}
                 onChange={(e) => setEditingTextValue(e.target.value)}
                 onKeyDown={(e) => {
+                  e.stopPropagation()
                   if (e.key === 'Enter') {
                     setObjects(prev => prev.map(obj =>
                       obj.id === editingTextId
                         ? { ...obj, text: editingTextValue, bodyText: obj.type === 'label' ? editingTextValue : undefined }
                         : obj
                     ))
+                    setEditingTextId(null)
+                    setEditingTextValue('')
+                  } else if (e.key === 'Escape') {
                     setEditingTextId(null)
                     setEditingTextValue('')
                   }
@@ -2189,6 +2278,8 @@ export function MockupAnnotator({ isOpen, onClose }) {
             onDeleteLayer={deleteLayer}
             onReorderLayers={() => {}}
             onRenameLayer={renameLayer}
+            smartFillOnDelete={smartFillOnDelete}
+            onToggleSmartFill={setSmartFillOnDelete}
           />
           {/* Sequence Panel */}
           <SequencePanel
