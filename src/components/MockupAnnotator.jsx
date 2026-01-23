@@ -410,6 +410,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
   // Text editing
   const [editingTextId, setEditingTextId] = useState(null)
   const [editingTextValue, setEditingTextValue] = useState('')
+  const [editingOriginalValue, setEditingOriginalValue] = useState('')
 
   // Selection for cutout
   const [selectionPath, setSelectionPath] = useState([])
@@ -868,11 +869,13 @@ export function MockupAnnotator({ isOpen, onClose }) {
     const preset = LABEL_PRESETS.find(p => p.type === label?.type) || LABEL_PRESETS[0]
     const displayText = text || preset.text
     const padding = 8
+    const lineHeight = 20
+    const isEditing = editingTextId === obj.id
 
     ctx.font = 'bold 12px sans-serif'
-    const headerMetrics = ctx.measureText(displayText)
-    const headerWidth = headerMetrics.width + padding * 2
-    const headerHeight = 24
+    const headerLines = displayText.split('\n')
+    const headerWidth = Math.max(...headerLines.map(line => ctx.measureText(line).width)) + padding * 2
+    const headerHeight = headerLines.length * lineHeight + 4
 
     let totalHeight = headerHeight
     let bodyWidth = 0
@@ -887,40 +890,44 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
     const totalWidth = Math.max(headerWidth, bodyWidth + padding * 2)
 
-    // Drop shadow
-    ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
-    ctx.shadowBlur = 6
-    ctx.shadowOffsetX = 2
-    ctx.shadowOffsetY = 2
+    if (!isEditing) {
+      // Drop shadow
+      ctx.save()
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+      ctx.shadowBlur = 6
+      ctx.shadowOffsetX = 2
+      ctx.shadowOffsetY = 2
 
-    // Orange background
-    ctx.fillStyle = '#F97316'
-    ctx.beginPath()
-    ctx.roundRect(x, y, totalWidth, totalHeight, 4)
-    ctx.fill()
-    ctx.restore()
+      // Orange background
+      ctx.fillStyle = '#F97316'
+      ctx.beginPath()
+      ctx.roundRect(x, y, totalWidth, totalHeight, 4)
+      ctx.fill()
+      ctx.restore()
 
-    // 2px white border
-    ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.roundRect(x, y, totalWidth, totalHeight, 4)
-    ctx.stroke()
+      // 2px white border
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.roundRect(x, y, totalWidth, totalHeight, 4)
+      ctx.stroke()
 
-    // Header text (white on orange)
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 12px sans-serif'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(displayText, x + padding, y + headerHeight / 2)
-
-    // Body text
-    if (bodyText) {
-      ctx.fillStyle = '#fff'
-      ctx.font = '12px sans-serif'
-      bodyLines.forEach((line, i) => {
-        ctx.fillText(line, x + padding, y + headerHeight + i * 18 + 9)
+      // Header text (white on orange)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.textBaseline = 'middle'
+      headerLines.forEach((line, i) => {
+        ctx.fillText(line, x + padding, y + i * lineHeight + lineHeight / 2 + 2)
       })
+
+      // Body text
+      if (bodyText) {
+        ctx.fillStyle = '#fff'
+        ctx.font = '12px sans-serif'
+        bodyLines.forEach((line, i) => {
+          ctx.fillText(line, x + padding, y + headerHeight + i * 18 + 9)
+        })
+      }
     }
   }
 
@@ -1029,8 +1036,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
           const copy = { ...clickedObject, id: generateId() }
           setObjects(prev => [...prev, copy])
           setSelectedObjectId(copy.id)
+          setSelectedLayerIds([copy.layerId])
         } else {
           setSelectedObjectId(clickedObject.id)
+          setSelectedLayerIds([clickedObject.layerId])
         }
         setIsDraggingObject(true)
         // Store offset from click to object origin
@@ -1079,6 +1088,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       setSelectedObjectId(newText.id)
       setEditingTextId(newText.id)
       setEditingTextValue('Double-click to edit')
+      setEditingOriginalValue('Double-click to edit')
     }
 
     // Label tool - show menu
@@ -1353,8 +1363,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
     })
 
     if (clickedObject) {
+      const value = clickedObject.text || ''
       setEditingTextId(clickedObject.id)
-      setEditingTextValue(clickedObject.text || clickedObject.bodyText || '')
+      setEditingTextValue(value)
+      setEditingOriginalValue(value)
     }
   }, [objects, offset, zoom])
 
@@ -1446,7 +1458,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
           // Save text
           setObjects(prev => prev.map(obj =>
             obj.id === editingTextId
-              ? { ...obj, text: editingTextValue, bodyText: obj.type === 'label' ? editingTextValue : undefined }
+              ? { ...obj, text: editingTextValue }
               : obj
           ))
           setEditingTextId(null)
@@ -1479,9 +1491,13 @@ export function MockupAnnotator({ isOpen, onClose }) {
         if (e.key === 's' || e.key === 'S') setSequenceMode(prev => !prev)
       }
 
-      // Delete selected object and its layer
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObjectId) {
-        deleteObject(selectedObjectId)
+      // Delete selected layers and their objects
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedLayerIds.length > 0) {
+        const remaining = layers.filter(l => !selectedLayerIds.includes(l.id))
+        selectedLayerIds.forEach(layerId => deleteLayer(layerId))
+        if (remaining.length > 0) {
+          setSelectedLayerIds([remaining[remaining.length - 1].id])
+        }
       }
 
       // Copy/Paste
@@ -1515,7 +1531,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, editingTextId, editingTextValue, selectedObjectId, objects, layers, selectionPath, showLabelMenu, offset, zoom, onClose, undo, redo])
+  }, [isOpen, editingTextId, editingTextValue, selectedObjectId, selectedLayerIds, objects, layers, selectionPath, showLabelMenu, offset, zoom, onClose, undo, redo])
 
   // ================== ACTIONS ==================
   const createLayerForObject = (typeName) => {
@@ -2283,38 +2299,60 @@ export function MockupAnnotator({ isOpen, onClose }) {
           )}
 
           {/* Text input overlay */}
-          {editingTextId && (
-            <div
-              className="absolute bg-gray-800 border border-blue-500 rounded px-2 py-1"
-              style={{
-                left: (objects.find(o => o.id === editingTextId)?.x || 0) * zoom + offset.x,
-                top: (objects.find(o => o.id === editingTextId)?.y || 0) * zoom + offset.y
-              }}
-            >
-              <input
-                type="text"
-                value={editingTextValue}
-                onChange={(e) => setEditingTextValue(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter') {
-                    setObjects(prev => prev.map(obj =>
-                      obj.id === editingTextId
-                        ? { ...obj, text: editingTextValue, bodyText: obj.type === 'label' ? editingTextValue : undefined }
-                        : obj
-                    ))
-                    setEditingTextId(null)
-                    setEditingTextValue('')
-                  } else if (e.key === 'Escape') {
-                    setEditingTextId(null)
-                    setEditingTextValue('')
-                  }
+          {editingTextId && (() => {
+            const editObj = objects.find(o => o.id === editingTextId)
+            if (!editObj) return null
+            const isLabel = editObj.type === 'label'
+            const padding = 8 * zoom
+            return (
+              <div
+                className="absolute"
+                style={{
+                  left: (editObj.x || 0) * zoom + offset.x,
+                  top: (editObj.y || 0) * zoom + offset.y,
                 }}
-                className="bg-transparent text-white outline-none min-w-[100px]"
-                autoFocus
-              />
-            </div>
-          )}
+              >
+                <textarea
+                  value={editingTextValue}
+                  onChange={(e) => setEditingTextValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation()
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      setObjects(prev => prev.map(obj =>
+                        obj.id === editingTextId
+                          ? { ...obj, text: editingTextValue }
+                          : obj
+                      ))
+                      setEditingTextId(null)
+                      setEditingTextValue('')
+                    } else if (e.key === 'Escape') {
+                      setEditingTextValue(editingOriginalValue)
+                      setEditingTextId(null)
+                    }
+                  }}
+                  className={`outline-none resize-none overflow-hidden ${
+                    isLabel
+                      ? 'text-white bg-[#F97316] font-bold border-2 border-white rounded'
+                      : 'text-white bg-[#1a1a1a] border border-blue-500 rounded px-1 py-0.5'
+                  }`}
+                  style={isLabel ? {
+                    fontSize: 12 * zoom,
+                    lineHeight: `${20 * zoom}px`,
+                    padding: `${2 * zoom}px ${padding}px`,
+                    minWidth: 80 * zoom,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
+                  } : {
+                    fontSize: 12 * zoom,
+                    lineHeight: `${18 * zoom}px`,
+                    minHeight: 18 * zoom
+                  }}
+                  rows={Math.max(1, editingTextValue.split('\n').length)}
+                  autoFocus
+                />
+              </div>
+            )
+          })()}
         </div>
 
         {/* Right panel */}
@@ -2375,12 +2413,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
                 <button
                   key={preset.type}
                   onClick={() => createLabel(preset, { x: -offset.x / zoom + 100, y: -offset.y / zoom + 100 })}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 text-left"
-                  style={{ color: preset.color }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 text-left text-gray-300"
                 >
-                  <span className="opacity-50">{index + 1}</span>
-                  <span>{preset.icon}</span>
-                  <span>{preset.type}</span>
+                  <span className="text-gray-500">{index + 1}</span>
+                  <span className="text-[#F97316]">{preset.type}</span>
                 </button>
               ))}
             </div>
@@ -2393,7 +2429,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
             <p>• Ctrl+G to generate prompt</p>
             <p>• Ctrl+C to copy canvas to clipboard</p>
             <p>• Cmd+G to paste image in Claude Code</p>
-            <p>• Del to delete selected object</p>
+            <p>• Del to delete selected layer(s)</p>
             <p>• Alt+drag to duplicate object</p>
             <p>• Shift+release to delete dragged object</p>
             <p>• Ctrl+click / Shift+click for multi-select layers</p>
