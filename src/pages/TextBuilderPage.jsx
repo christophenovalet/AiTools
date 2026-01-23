@@ -9,9 +9,10 @@ import { ProjectsModal } from '@/components/ProjectsModal'
 import { ChatbotPanel } from '@/components/chatbot/ChatbotPanel'
 import { SelectionToolbar } from '@/components/chatbot/SelectionToolbar'
 import { Button } from '@/components/ui/button'
-import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings, GitCompare, RotateCcw, Check } from 'lucide-react'
+import { Plus, Home, X, Trash2, FolderOpen, Save, MessageSquare, Settings, GitCompare, RotateCcw, Check, PenTool } from 'lucide-react'
 import { getShortcut, matchesShortcut, formatShortcut } from '@/lib/keyboard-shortcuts'
 import { CompareColumnsModal } from '@/components/CompareColumnsModal'
+import { MockupAnnotator } from '@/components/MockupAnnotator'
 import { textsApi, isAuthenticated } from '@/lib/api'
 
 // Helper to generate default title with date format: "New prompt Friday 0610"
@@ -61,6 +62,9 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
   // Compare columns state
   const [columnsSelectedForCompare, setColumnsSelectedForCompare] = useState(new Set())
   const [showCompareModal, setShowCompareModal] = useState(false)
+
+  // Mockup annotator state
+  const [isMockupOpen, setIsMockupOpen] = useState(false)
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
@@ -715,6 +719,14 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
 
           <div className="flex gap-3 items-center">
             <Button
+              onClick={() => setIsMockupOpen(true)}
+              variant="ghost"
+              className="text-pink-400 hover:text-pink-300 hover:bg-pink-500/10"
+            >
+              <PenTool className="mr-2 h-4 w-4" />
+              Mockup
+            </Button>
+            <Button
               onClick={() => setIsChatbotOpen(prev => !prev)}
               variant={isChatbotOpen ? "default" : "ghost"}
               className={isChatbotOpen
@@ -905,6 +917,12 @@ export function TextBuilderPage({ onBackHome, onOpenSettings }) {
         onClose={() => setShowCompareModal(false)}
         columns={getCompareColumns()}
         onApplyChanges={handleApplyCompareChanges}
+      />
+
+      {/* Mockup Annotator */}
+      <MockupAnnotator
+        isOpen={isMockupOpen}
+        onClose={() => setIsMockupOpen(false)}
       />
 
       {/* Selection Toolbar */}

@@ -1,20 +1,9 @@
-import React, { useCallback, useRef, useImperativeHandle, forwardRef, useMemo } from 'react'
+import React, { useCallback, useRef, useImperativeHandle, forwardRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { xml } from '@codemirror/lang-xml'
 import { foldAll, unfoldAll } from '@codemirror/language'
-import { EditorView } from '@codemirror/view'
 import { Button } from './ui/button'
 import { WrapText, ChevronsDownUp, ChevronsUpDown, Copy } from 'lucide-react'
-
-// Helper to convert image file to base64
-const imageToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 // XML formatting function - preserves content structure while fixing indentation
 export function formatXml(xmlString) {
@@ -148,39 +137,6 @@ const XmlEditor = forwardRef(function XmlEditor({
     navigator.clipboard.writeText(value)
   }, [value])
 
-  // Create paste handler extension for images
-  const pasteExtension = useMemo(() => {
-    return EditorView.domEventHandlers({
-      paste: (event, view) => {
-        const clipboardData = event.clipboardData
-        if (!clipboardData) return false
-
-        // Check for image files in clipboard
-        const items = Array.from(clipboardData.items)
-        const imageItem = items.find(item => item.type.startsWith('image/'))
-
-        if (imageItem) {
-          event.preventDefault()
-          const file = imageItem.getAsFile()
-          if (file) {
-            // Handle async conversion without blocking the event handler
-            imageToBase64(file).then(base64 => {
-              const imageTag = `<image>\n\t${base64}\n</image>`
-              const { from, to } = view.state.selection.main
-              view.dispatch({
-                changes: { from, to, insert: imageTag },
-                selection: { anchor: from + imageTag.length }
-              })
-            }).catch(err => {
-              console.error('Failed to convert image to base64:', err)
-            })
-          }
-          return true  // Synchronously tell CodeMirror we handled image paste
-        }
-        return false  // Synchronously tell CodeMirror to do default text paste
-      }
-    })
-  }, [])
 
   return (
     <div className="flex flex-col h-full">
@@ -233,7 +189,7 @@ const XmlEditor = forwardRef(function XmlEditor({
           ref={editorRef}
           value={value}
           onChange={onChange}
-          extensions={[xml(), pasteExtension]}
+          extensions={[xml()]}
           theme="dark"
           placeholder={placeholder}
           minHeight={minHeight}
