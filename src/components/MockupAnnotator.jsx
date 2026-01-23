@@ -1490,6 +1490,98 @@ export function MockupAnnotator({ isOpen, onClose }) {
     setShowLabelMenu(false)
   }
 
+  const sampleBackgroundColor = (origCtx, localPath, imageWidth, imageHeight) => {
+    // 1. Compute centroid of the selection path
+    const centroid = {
+      x: localPath.reduce((sum, p) => sum + p.x, 0) / localPath.length,
+      y: localPath.reduce((sum, p) => sum + p.y, 0) / localPath.length
+    }
+
+    // 2. Compute total perimeter length and pick ~16 evenly-spaced sample points
+    const segments = []
+    let totalLength = 0
+    for (let i = 0; i < localPath.length; i++) {
+      const a = localPath[i]
+      const b = localPath[(i + 1) % localPath.length]
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len = Math.sqrt(dx * dx + dy * dy)
+      segments.push({ a, b, len })
+      totalLength += len
+    }
+
+    const numSamples = 16
+    const interval = totalLength / numSamples
+    const samplePoints = []
+    let accumulated = 0
+    let segIndex = 0
+    let segOffset = 0
+
+    for (let i = 0; i < numSamples; i++) {
+      const target = i * interval
+      while (segIndex < segments.length - 1 && accumulated + segments[segIndex].len - segOffset < target) {
+        accumulated += segments[segIndex].len - segOffset
+        segIndex++
+        segOffset = 0
+      }
+      const remaining = target - accumulated
+      const seg = segments[segIndex]
+      const t = (segOffset + remaining) / seg.len
+      samplePoints.push({
+        x: seg.a.x + (seg.b.x - seg.a.x) * t,
+        y: seg.a.y + (seg.b.y - seg.a.y) * t
+      })
+    }
+
+    // 3. Offset each sample point 3px outward from centroid, clamp to image bounds
+    const offsetPoints = samplePoints.map(p => {
+      const dx = p.x - centroid.x
+      const dy = p.y - centroid.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist === 0) return p
+      const nx = dx / dist
+      const ny = dy / dist
+      return {
+        x: Math.max(0, Math.min(imageWidth - 1, Math.round(p.x + nx * 3))),
+        y: Math.max(0, Math.min(imageHeight - 1, Math.round(p.y + ny * 3)))
+      }
+    })
+
+    // 4. Read pixel colors at each offset point
+    const pixels = offsetPoints.map(p => {
+      const data = origCtx.getImageData(p.x, p.y, 1, 1).data
+      return { r: data[0], g: data[1], b: data[2] }
+    })
+
+    // 5. Find dominant color by grouping pixels with RGB distance < 30
+    const used = new Array(pixels.length).fill(false)
+    const groups = []
+    for (let i = 0; i < pixels.length; i++) {
+      if (used[i]) continue
+      const group = [pixels[i]]
+      used[i] = true
+      for (let j = i + 1; j < pixels.length; j++) {
+        if (used[j]) continue
+        const dr = pixels[i].r - pixels[j].r
+        const dg = pixels[i].g - pixels[j].g
+        const db = pixels[i].b - pixels[j].b
+        if (Math.sqrt(dr * dr + dg * dg + db * db) < 30) {
+          group.push(pixels[j])
+          used[j] = true
+        }
+      }
+      groups.push(group)
+    }
+
+    // Pick the largest group and average its colors
+    const largest = groups.reduce((a, b) => a.length >= b.length ? a : b)
+    const avgR = Math.round(largest.reduce((s, p) => s + p.r, 0) / largest.length)
+    const avgG = Math.round(largest.reduce((s, p) => s + p.g, 0) / largest.length)
+    const avgB = Math.round(largest.reduce((s, p) => s + p.b, 0) / largest.length)
+
+    return `rgb(${avgR}, ${avgG}, ${avgB})`
+  }
+
   const handleCutToLayer = () => {
     if (selectionPath.length === 0) return
 
@@ -1556,7 +1648,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       origCtx.lineTo(localPath[i].x, localPath[i].y)
     }
     origCtx.closePath()
-    origCtx.fillStyle = fgColor
+    origCtx.fillStyle = sampleBackgroundColor(origCtx, localPath, targetImage.width, targetImage.height)
     origCtx.fill()
     origCtx.restore()
 
