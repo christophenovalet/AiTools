@@ -8,6 +8,12 @@ import {
   Scissors, Spline, CornerDownRight, ArrowLeftRight, Hash, FileText, Undo2, Redo2, Maximize2
 } from 'lucide-react'
 
+const SquareDashed = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 3" />
+  </svg>
+)
+
 // ================== CONSTANTS ==================
 const TOOLS = {
   SELECT: 'select',
@@ -244,15 +250,17 @@ const PropertiesPanel = ({ selectedObject, onUpdateObject }) => {
           <div className="flex gap-1">
             <button
               onClick={() => onUpdateObject({ ...selectedObject, dashed: false })}
-              className={`px-2 py-1 text-xs rounded ${!selectedObject.dashed ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+              className={`px-2 py-1 rounded ${!selectedObject.dashed ? 'bg-blue-500' : 'bg-gray-700'}`}
+              title="Solid"
             >
-              Solid
+              <svg width="20" height="12" viewBox="0 0 20 12"><line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2"/></svg>
             </button>
             <button
               onClick={() => onUpdateObject({ ...selectedObject, dashed: true })}
-              className={`px-2 py-1 text-xs rounded ${selectedObject.dashed ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+              className={`px-2 py-1 rounded ${selectedObject.dashed ? 'bg-blue-500' : 'bg-gray-700'}`}
+              title="Dotted"
             >
-              Dotted
+              <svg width="20" height="12" viewBox="0 0 20 12"><line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2"/></svg>
             </button>
           </div>
         </div>
@@ -291,6 +299,24 @@ const PropertiesPanel = ({ selectedObject, onUpdateObject }) => {
             onChange={(e) => onUpdateObject({ ...selectedObject, text: e.target.value })}
             className="w-full bg-gray-800 text-gray-200 text-sm px-2 py-1 rounded border border-gray-600 focus:border-blue-500 outline-none"
           />
+        </div>
+      )}
+
+      {/* Font Size for Text */}
+      {selectedObject.fontSize !== undefined && (
+        <div className="space-y-1">
+          <label className="text-xs text-gray-400">Font Size</label>
+          <div className="flex gap-1">
+            {[16, 24, 36, 48].map(s => (
+              <button
+                key={s}
+                onClick={() => onUpdateObject({ ...selectedObject, fontSize: s })}
+                className={`px-2 py-1 text-xs rounded ${selectedObject.fontSize === s ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -399,6 +425,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
   // Smart fill on delete
   const [smartFillOnDelete, setSmartFillOnDelete] = useState(true)
 
+  // Text size (persisted)
+  const [textSize, setTextSize] = useState(() => parseInt(localStorage.getItem('annotator-text-size')) || 16)
+  const updateTextSize = (size) => { setTextSize(size); localStorage.setItem('annotator-text-size', size) }
+
   // Foreground color
   const [fgColor, setFgColor] = useState('#ffffff')
   const fgColorInputRef = useRef(null)
@@ -416,6 +446,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
   const [editingTextId, setEditingTextId] = useState(null)
   const [editingTextValue, setEditingTextValue] = useState('')
   const [editingOriginalValue, setEditingOriginalValue] = useState('')
+  const [inlineEditCursorPos, setInlineEditCursorPos] = useState(0)
+  const [inlineEditCursorVisible, setInlineEditCursorVisible] = useState(true)
+  const inlineEditBlinkRef = useRef(null)
 
   // Selection for cutout
   const [selectionPath, setSelectionPath] = useState([])
@@ -551,26 +584,58 @@ export function MockupAnnotator({ isOpen, onClose }) {
             }
             break
 
-          case 'text':
-            ctx.font = `${obj.fontSize || 16}px ${obj.fontFamily || 'sans-serif'}`
+          case 'text': {
+            const fontSize = obj.fontSize || 16
+            const fontFamily = obj.fontFamily || 'sans-serif'
+            ctx.font = `${fontSize}px ${fontFamily}`
             ctx.fillStyle = obj.color || '#fff'
             ctx.textBaseline = 'top'
+            const isEditing = obj.id === editingTextId
+            const displayText = isEditing ? editingTextValue : (obj.text || '')
+            const lines = displayText.split('\n')
+            const lineHeight = fontSize * 1.3
             if (obj.background && obj.background !== 'none') {
-              const metrics = ctx.measureText(obj.text)
+              const maxWidth = Math.max(...lines.map(l => ctx.measureText(l).width), 2)
               ctx.fillStyle = obj.background
-              ctx.fillRect(obj.x - 4, obj.y - 2, metrics.width + 8, (obj.fontSize || 16) + 4)
+              ctx.fillRect(obj.x - 4, obj.y - 2, maxWidth + 8, lines.length * lineHeight + 4)
               ctx.fillStyle = obj.color || '#fff'
             }
-            ctx.fillText(obj.text, obj.x, obj.y)
+            lines.forEach((line, i) => {
+              ctx.fillText(line, obj.x, obj.y + i * lineHeight)
+            })
+            // Draw blinking cursor
+            if (isEditing && inlineEditCursorVisible) {
+              let charCount = 0
+              let cursorLine = 0
+              let cursorCol = 0
+              for (let i = 0; i < lines.length; i++) {
+                if (inlineEditCursorPos <= charCount + lines[i].length) {
+                  cursorLine = i
+                  cursorCol = inlineEditCursorPos - charCount
+                  break
+                }
+                charCount += lines[i].length + 1 // +1 for \n
+              }
+              const textBeforeCursor = lines[cursorLine].substring(0, cursorCol)
+              const cursorX = obj.x + ctx.measureText(textBeforeCursor).width
+              const cursorY = obj.y + cursorLine * lineHeight
+              ctx.strokeStyle = obj.color || '#fff'
+              ctx.lineWidth = 1.5 / zoom
+              ctx.beginPath()
+              ctx.moveTo(cursorX, cursorY)
+              ctx.lineTo(cursorX, cursorY + fontSize)
+              ctx.stroke()
+            }
             break
+          }
 
           case 'label':
             drawLabel(ctx, obj)
             break
         }
 
-        // Draw selection box (skip for images, labels, and arrows)
-        const skipSelection = ['image', 'label', 'arrow', 'dashed_arrow', 'elbow_arrow', 'curved_arrow', 'bidirectional', 'rectangle', 'ellipse']
+        // Draw selection box (skip for images, labels, arrows, and text)
+        const skipSelection = ['image', 'label', 'text', 'arrow', 'dashed_arrow', 'elbow_arrow', 'curved_arrow', 'bidirectional', 'rectangle', 'ellipse']
         if (obj.id === selectedObjectId && !skipSelection.includes(obj.type) && activeTool !== TOOLS.TRANSFORM) {
           ctx.strokeStyle = '#00bfff'
           ctx.lineWidth = 2 / zoom
@@ -727,7 +792,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     }
 
     ctx.restore()
-  }, [layers, objects, selectedObjectId, zoom, offset, isDrawing, drawStart, currentPath, activeTool, selectionPath])
+  }, [layers, objects, selectedObjectId, zoom, offset, isDrawing, drawStart, currentPath, activeTool, selectionPath, editingTextId, editingTextValue, inlineEditCursorVisible, inlineEditCursorPos])
 
   // ================== ARROW DRAWING HELPERS ==================
   const drawArrowOutline = (ctx, drawFn) => {
@@ -1000,6 +1065,19 @@ export function MockupAnnotator({ isOpen, onClose }) {
     }
   }
 
+  const measureMultilineText = (text, fontSize = 16, fontFamily = 'sans-serif') => {
+    const canvas = canvasRef.current
+    if (!canvas) return { width: 10, height: fontSize, lineWidths: [10], lineHeight: fontSize * 1.3, lines: [text || ''] }
+    const ctx = canvas.getContext('2d')
+    ctx.font = `${fontSize}px ${fontFamily}`
+    const lines = (text || '').split('\n')
+    const lineHeight = fontSize * 1.3
+    const lineWidths = lines.map(line => ctx.measureText(line).width)
+    const width = Math.max(...lineWidths, 10)
+    const height = lines.length * lineHeight
+    return { width, height, lineWidths, lineHeight, lines }
+  }
+
   const getObjectBounds = (obj) => {
     switch (obj.type) {
       case 'rectangle':
@@ -1018,8 +1096,11 @@ export function MockupAnnotator({ isOpen, onClose }) {
           width: Math.abs(obj.x2 - obj.x1),
           height: Math.abs(obj.y2 - obj.y1)
         }
-      case 'text':
-        return { x: obj.x, y: obj.y, width: 100, height: obj.fontSize || 16 }
+      case 'text': {
+        const textToMeasure = (editingTextId === obj.id ? editingTextValue : obj.text) || ''
+        const measured = measureMultilineText(textToMeasure, obj.fontSize || 16, obj.fontFamily || 'sans-serif')
+        return { x: obj.x, y: obj.y, width: Math.max(measured.width, 2), height: Math.max(measured.height, obj.fontSize || 16) }
+      }
       case 'label':
         return { x: obj.x, y: obj.y, width: 120, height: 40 }
       case 'pen':
@@ -1057,6 +1138,24 @@ export function MockupAnnotator({ isOpen, onClose }) {
     return () => window.removeEventListener('resize', resizeCanvas)
   }, [isOpen, renderCanvas])
 
+  // Cursor blink for inline text editing
+  useEffect(() => {
+    if (editingTextId) {
+      const editObj = objects.find(o => o.id === editingTextId)
+      if (editObj && editObj.type === 'text') {
+        setInlineEditCursorVisible(true)
+        inlineEditBlinkRef.current = setInterval(() => {
+          setInlineEditCursorVisible(v => !v)
+        }, 530)
+        return () => clearInterval(inlineEditBlinkRef.current)
+      }
+    }
+    if (inlineEditBlinkRef.current) {
+      clearInterval(inlineEditBlinkRef.current)
+      inlineEditBlinkRef.current = null
+    }
+  }, [editingTextId])
+
   // Wheel zoom
   const handleWheel = useCallback((e) => {
     e.preventDefault()
@@ -1089,6 +1188,59 @@ export function MockupAnnotator({ isOpen, onClose }) {
       setIsPanning(true)
       setPanStart({ x: e.clientX - offset.x, y: e.clientY - offset.y })
       return
+    }
+
+    // If currently inline-editing a text object, handle click-to-reposition or confirm
+    if (editingTextId) {
+      const editObj = objects.find(o => o.id === editingTextId)
+      if (editObj && editObj.type === 'text') {
+        const bounds = getObjectBounds(editObj)
+        const inBounds = point.x >= bounds.x && point.x <= bounds.x + bounds.width &&
+                         point.y >= bounds.y && point.y <= bounds.y + bounds.height
+        if (inBounds) {
+          // Reposition cursor based on click location
+          const fontSize = editObj.fontSize || 16
+          const fontFamily = editObj.fontFamily || 'sans-serif'
+          const lineHeight = fontSize * 1.3
+          const lines = editingTextValue.split('\n')
+          const clickedLine = Math.min(Math.floor((point.y - editObj.y) / lineHeight), lines.length - 1)
+          const lineIdx = Math.max(0, clickedLine)
+          const canvas = canvasRef.current
+          const ctx = canvas.getContext('2d')
+          ctx.font = `${fontSize}px ${fontFamily}`
+          // Find closest char position in clicked line
+          let bestPos = 0
+          let bestDist = Infinity
+          for (let c = 0; c <= lines[lineIdx].length; c++) {
+            const w = ctx.measureText(lines[lineIdx].substring(0, c)).width
+            const dist = Math.abs(point.x - (editObj.x + w))
+            if (dist < bestDist) {
+              bestDist = dist
+              bestPos = c
+            }
+          }
+          // Convert to absolute position
+          let absPos = 0
+          for (let i = 0; i < lineIdx; i++) {
+            absPos += lines[i].length + 1
+          }
+          absPos += bestPos
+          setInlineEditCursorPos(absPos)
+          setInlineEditCursorVisible(true)
+          return
+        } else {
+          // Clicked outside - confirm edit
+          if (editingTextValue.trim() === '') {
+            setObjects(prev => prev.filter(o => o.id !== editingTextId))
+          } else {
+            setObjects(prev => prev.map(obj =>
+              obj.id === editingTextId ? { ...obj, text: editingTextValue } : obj
+            ))
+          }
+          setEditingTextId(null)
+          setEditingTextValue('')
+        }
+      }
     }
 
     // Select tool: click object to select & drag, empty space to pan
@@ -1206,8 +1358,8 @@ export function MockupAnnotator({ isOpen, onClose }) {
         layerId,
         x: point.x,
         y: point.y,
-        text: 'Double-click to edit',
-        fontSize: 16,
+        text: '',
+        fontSize: textSize,
         fontFamily: 'sans-serif',
         color: '#ffffff',
         background: 'none',
@@ -1218,8 +1370,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
       if (sequenceMode) setNextSequenceNumber(prev => prev + 1)
       setSelectedObjectId(newText.id)
       setEditingTextId(newText.id)
-      setEditingTextValue('Double-click to edit')
-      setEditingOriginalValue('Double-click to edit')
+      setEditingTextValue('')
+      setEditingOriginalValue('')
+      setInlineEditCursorPos(0)
     }
 
     // Label tool - show menu
@@ -1228,7 +1381,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       setLabelMenuPosition({ x: e.clientX, y: e.clientY })
       setShowLabelMenu(true)
     }
-  }, [activeTool, objects, offset, zoom, selectedLayerIds, sequenceMode, nextSequenceNumber, currentPath])
+  }, [activeTool, objects, offset, zoom, selectedLayerIds, sequenceMode, nextSequenceNumber, currentPath, editingTextId, editingTextValue, editingOriginalValue, textSize])
 
   const handleMouseMove = useCallback((e) => {
     if (isPanning) {
@@ -1538,6 +1691,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
       setEditingTextId(clickedObject.id)
       setEditingTextValue(value)
       setEditingOriginalValue(value)
+      setInlineEditCursorPos(value.length)
     }
   }, [objects, offset, zoom])
 
@@ -1620,20 +1774,127 @@ export function MockupAnnotator({ isOpen, onClose }) {
         return
       }
 
-      // Don't capture if editing text
+      // Inline text editing - capture all keystrokes
       if (editingTextId) {
+        const editObj = objects.find(o => o.id === editingTextId)
+        if (editObj && editObj.type === 'text') {
+          e.preventDefault()
+          e.stopPropagation()
+          const text = editingTextValue
+          const pos = inlineEditCursorPos
+
+          if (e.key === 'Escape') {
+            // Cancel - revert to original, remove if was empty
+            if (editingOriginalValue === '') {
+              setObjects(prev => prev.filter(o => o.id !== editingTextId))
+            } else {
+              setObjects(prev => prev.map(obj =>
+                obj.id === editingTextId ? { ...obj, text: editingOriginalValue } : obj
+              ))
+            }
+            setEditingTextId(null)
+            setEditingTextValue('')
+          } else if (e.key === 'Enter' && !e.shiftKey) {
+            // Confirm edit - remove object if empty
+            if (text.trim() === '') {
+              setObjects(prev => prev.filter(o => o.id !== editingTextId))
+            } else {
+              setObjects(prev => prev.map(obj =>
+                obj.id === editingTextId ? { ...obj, text } : obj
+              ))
+            }
+            setEditingTextId(null)
+            setEditingTextValue('')
+          } else if (e.key === 'Enter' && e.shiftKey) {
+            // Insert newline
+            const newText = text.slice(0, pos) + '\n' + text.slice(pos)
+            setEditingTextValue(newText)
+            setInlineEditCursorPos(pos + 1)
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'Backspace') {
+            if (pos > 0) {
+              setEditingTextValue(text.slice(0, pos - 1) + text.slice(pos))
+              setInlineEditCursorPos(pos - 1)
+              setInlineEditCursorVisible(true)
+            }
+          } else if (e.key === 'Delete') {
+            if (pos < text.length) {
+              setEditingTextValue(text.slice(0, pos) + text.slice(pos + 1))
+              setInlineEditCursorVisible(true)
+            }
+          } else if (e.key === 'ArrowLeft') {
+            setInlineEditCursorPos(Math.max(0, pos - 1))
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'ArrowRight') {
+            setInlineEditCursorPos(Math.min(text.length, pos + 1))
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'ArrowUp') {
+            const lines = text.split('\n')
+            let charCount = 0, curLine = 0, curCol = 0
+            for (let i = 0; i < lines.length; i++) {
+              if (pos <= charCount + lines[i].length) {
+                curLine = i; curCol = pos - charCount; break
+              }
+              charCount += lines[i].length + 1
+            }
+            if (curLine > 0) {
+              let newPos = 0
+              for (let i = 0; i < curLine - 1; i++) newPos += lines[i].length + 1
+              newPos += Math.min(curCol, lines[curLine - 1].length)
+              setInlineEditCursorPos(newPos)
+            }
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'ArrowDown') {
+            const lines = text.split('\n')
+            let charCount = 0, curLine = 0, curCol = 0
+            for (let i = 0; i < lines.length; i++) {
+              if (pos <= charCount + lines[i].length) {
+                curLine = i; curCol = pos - charCount; break
+              }
+              charCount += lines[i].length + 1
+            }
+            if (curLine < lines.length - 1) {
+              let newPos = 0
+              for (let i = 0; i <= curLine; i++) newPos += lines[i].length + 1
+              newPos += Math.min(curCol, lines[curLine + 1].length)
+              setInlineEditCursorPos(newPos)
+            }
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'Home') {
+            const lines = text.split('\n')
+            let charCount = 0
+            for (let i = 0; i < lines.length; i++) {
+              if (pos <= charCount + lines[i].length) {
+                setInlineEditCursorPos(charCount)
+                break
+              }
+              charCount += lines[i].length + 1
+            }
+            setInlineEditCursorVisible(true)
+          } else if (e.key === 'End') {
+            const lines = text.split('\n')
+            let charCount = 0
+            for (let i = 0; i < lines.length; i++) {
+              if (pos <= charCount + lines[i].length) {
+                setInlineEditCursorPos(charCount + lines[i].length)
+                break
+              }
+              charCount += lines[i].length + 1
+            }
+            setInlineEditCursorVisible(true)
+          } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            // Printable character
+            const newText = text.slice(0, pos) + e.key + text.slice(pos)
+            setEditingTextValue(newText)
+            setInlineEditCursorPos(pos + 1)
+            setInlineEditCursorVisible(true)
+          }
+          return
+        }
+        // For labels, just handle Escape (textarea handles the rest)
         if (e.key === 'Escape') {
+          setEditingTextValue(editingOriginalValue)
           setEditingTextId(null)
-          setEditingTextValue('')
-        } else if (e.key === 'Enter' && !e.shiftKey) {
-          // Save text
-          setObjects(prev => prev.map(obj =>
-            obj.id === editingTextId
-              ? { ...obj, text: editingTextValue }
-              : obj
-          ))
-          setEditingTextId(null)
-          setEditingTextValue('')
         }
         return
       }
@@ -1653,13 +1914,13 @@ export function MockupAnnotator({ isOpen, onClose }) {
       // Tool shortcuts (only without Ctrl/Meta)
       if (!e.ctrlKey && !e.metaKey) {
         if (e.key === 'v' || e.key === 'V') setActiveTool(TOOLS.SELECT)
+        if (e.key === 'w' || e.key === 'W') setActiveTool(TOOLS.TRANSFORM)
         if (e.key === 'r' || e.key === 'R') setActiveTool(TOOLS.RECTANGLE)
         if (e.key === 'e' || e.key === 'E') setActiveTool(TOOLS.ELLIPSE)
         if (e.key === 'a' || e.key === 'A') setActiveTool(TOOLS.ARROW)
         if (e.key === 't' || e.key === 'T') setActiveTool(TOOLS.TEXT)
         if (e.key === 'p' || e.key === 'P') setActiveTool(TOOLS.PEN)
-        if (e.key === 'l' || e.key === 'L') setActiveTool(TOOLS.LASSO_SELECT)
-        if (e.key === 's' || e.key === 'S') setSequenceMode(prev => !prev)
+        if (e.key === 's' || e.key === 'S') setActiveTool(prev => prev === TOOLS.RECT_SELECT ? TOOLS.LASSO_SELECT : TOOLS.RECT_SELECT)
       }
 
       // Delete selected layers and their objects
@@ -1702,7 +1963,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, editingTextId, editingTextValue, selectedObjectId, selectedLayerIds, objects, layers, selectionPath, showLabelMenu, offset, zoom, onClose, undo, redo])
+  }, [isOpen, editingTextId, editingTextValue, editingOriginalValue, inlineEditCursorPos, selectedObjectId, selectedLayerIds, objects, layers, selectionPath, showLabelMenu, offset, zoom, onClose, undo, redo])
 
   // ================== ACTIONS ==================
   const createLayerForObject = (typeName) => {
@@ -2289,18 +2550,25 @@ export function MockupAnnotator({ isOpen, onClose }) {
               ctx.stroke()
             }
             break
-          case 'text':
-            ctx.font = `${obj.fontSize || 16}px ${obj.fontFamily || 'sans-serif'}`
+          case 'text': {
+            const fontSize = obj.fontSize || 16
+            const fontFamily = obj.fontFamily || 'sans-serif'
+            ctx.font = `${fontSize}px ${fontFamily}`
             ctx.fillStyle = obj.color || '#fff'
             ctx.textBaseline = 'top'
+            const lines = (obj.text || '').split('\n')
+            const lineHeight = fontSize * 1.3
             if (obj.background && obj.background !== 'none') {
-              const metrics = ctx.measureText(obj.text)
+              const maxWidth = Math.max(...lines.map(l => ctx.measureText(l).width), 2)
               ctx.fillStyle = obj.background
-              ctx.fillRect(obj.x - 4, obj.y - 2, metrics.width + 8, (obj.fontSize || 16) + 4)
+              ctx.fillRect(obj.x - 4, obj.y - 2, maxWidth + 8, lines.length * lineHeight + 4)
               ctx.fillStyle = obj.color || '#fff'
             }
-            ctx.fillText(obj.text, obj.x, obj.y)
+            lines.forEach((line, i) => {
+              ctx.fillText(line, obj.x, obj.y + i * lineHeight)
+            })
             break
+          }
           case 'label':
             drawLabel(ctx, obj)
             break
@@ -2370,19 +2638,6 @@ export function MockupAnnotator({ isOpen, onClose }) {
             onChange={(e) => setFgColor(e.target.value)}
             className="sr-only"
           />
-          <Button
-            onClick={() => setSequenceMode(!sequenceMode)}
-            variant={sequenceMode ? 'default' : 'ghost'}
-            size="sm"
-            className={sequenceMode ? 'bg-purple-600 hover:bg-purple-500' : 'text-gray-400'}
-          >
-            <Hash className="h-4 w-4 mr-1" />
-            Sequence {sequenceMode ? 'ON' : 'OFF'}
-          </Button>
-          <Button onClick={generatePrompt} variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300">
-            <FileText className="h-4 w-4 mr-1" />
-            Generate Prompt
-          </Button>
           <Button onClick={copyCanvasToClipboard} variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300">
             <Copy className="h-4 w-4 mr-1" />
             Copy
@@ -2402,7 +2657,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
         {/* Left toolbar */}
         <div className="w-12 bg-[#1a1a1a] border-r border-gray-700 flex flex-col items-center py-2 gap-1">
           <ToolButton icon={Move} tool={TOOLS.SELECT} active={activeTool} setActive={setActiveTool} tooltip="Move (V)" />
-          <ToolButton icon={Maximize2} tool={TOOLS.TRANSFORM} active={activeTool} setActive={setActiveTool} tooltip="Rotate/Scale" />
+          <ToolButton icon={Maximize2} tool={TOOLS.TRANSFORM} active={activeTool} setActive={setActiveTool} tooltip="Rotate/Scale (W)" />
           <div className="w-8 h-px bg-gray-700 my-1" />
           <ToolButton icon={Square} tool={TOOLS.RECTANGLE} active={activeTool} setActive={setActiveTool} tooltip="Rectangle (R)" />
           <ToolButton icon={Circle} tool={TOOLS.ELLIPSE} active={activeTool} setActive={setActiveTool} tooltip="Ellipse (E)" />
@@ -2416,8 +2671,8 @@ export function MockupAnnotator({ isOpen, onClose }) {
           <ToolButton icon={Pen} tool={TOOLS.PEN} active={activeTool} setActive={setActiveTool} tooltip="Pen (P)" />
           <ToolButton icon={MessageSquare} tool={TOOLS.LABEL} active={activeTool} setActive={setActiveTool} tooltip="Label (1-8)" />
           <div className="w-8 h-px bg-gray-700 my-1" />
-          <ToolButton icon={Square} tool={TOOLS.RECT_SELECT} active={activeTool} setActive={setActiveTool} tooltip="Rect Select" />
-          <ToolButton icon={Spline} tool={TOOLS.LASSO_SELECT} active={activeTool} setActive={setActiveTool} tooltip="Lasso (L)" />
+          <ToolButton icon={SquareDashed} tool={TOOLS.RECT_SELECT} active={activeTool} setActive={setActiveTool} tooltip="Rect Select (S)" />
+          <ToolButton icon={Spline} tool={TOOLS.LASSO_SELECT} active={activeTool} setActive={setActiveTool} tooltip="Lasso (S)" />
         </div>
 
         {/* Canvas */}
@@ -2470,11 +2725,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Text input overlay */}
+          {/* Text input overlay (labels only - text objects use inline canvas editing) */}
           {editingTextId && (() => {
             const editObj = objects.find(o => o.id === editingTextId)
-            if (!editObj) return null
-            const isLabel = editObj.type === 'label'
+            if (!editObj || editObj.type !== 'label') return null
             const padding = 8 * zoom
             return (
               <div
@@ -2503,21 +2757,13 @@ export function MockupAnnotator({ isOpen, onClose }) {
                       setEditingTextId(null)
                     }
                   }}
-                  className={`outline-none resize-none overflow-hidden ${
-                    isLabel
-                      ? 'text-white bg-[#F97316] font-bold border-2 border-white rounded'
-                      : 'text-white bg-[#1a1a1a] border border-blue-500 rounded px-1 py-0.5'
-                  }`}
-                  style={isLabel ? {
+                  className="outline-none resize-none overflow-hidden text-white bg-[#F97316] font-bold border-2 border-white rounded"
+                  style={{
                     fontSize: 12 * zoom,
                     lineHeight: `${20 * zoom}px`,
                     padding: `${2 * zoom}px ${padding}px`,
                     minWidth: 80 * zoom,
                     boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
-                  } : {
-                    fontSize: 12 * zoom,
-                    lineHeight: `${18 * zoom}px`,
-                    minHeight: 18 * zoom
                   }}
                   rows={Math.max(1, editingTextValue.split('\n').length)}
                   autoFocus
@@ -2594,6 +2840,23 @@ export function MockupAnnotator({ isOpen, onClose }) {
             </div>
           </div>
 
+          {/* Sequence & Generate */}
+          <div className="flex gap-0.5">
+            <Button
+              onClick={() => setSequenceMode(!sequenceMode)}
+              variant={sequenceMode ? 'default' : 'ghost'}
+              size="sm"
+              className={`flex-1 text-xs px-1 ${sequenceMode ? 'bg-purple-600 hover:bg-purple-500' : 'text-gray-400'}`}
+            >
+              <Hash className="h-3.5 w-3.5" />
+              Sequence {sequenceMode ? 'ON' : 'OFF'}
+            </Button>
+            <Button onClick={generatePrompt} variant="ghost" size="sm" className="flex-1 text-xs px-1 text-cyan-400 hover:text-cyan-300">
+              <FileText className="h-3.5 w-3.5" />
+              Generate Prompt
+            </Button>
+          </div>
+
           {/* Help */}
           <div className="text-xs text-gray-500 space-y-1">
             <p>• Scroll to zoom, drag empty space to pan</p>
@@ -2646,7 +2909,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
               onClick={() => { setActiveTool(TOOLS.RECT_SELECT); setShowContextMenu(false) }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700 text-left"
             >
-              <Square className="h-3.5 w-3.5 text-gray-400" /> Select Rectangle
+              <SquareDashed className="h-3.5 w-3.5 text-gray-400" /> Select Rectangle
             </button>
             <button
               onClick={() => { setActiveTool(TOOLS.LASSO_SELECT); setShowContextMenu(false) }}
