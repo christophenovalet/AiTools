@@ -5,7 +5,7 @@ import {
   Image, Layers, ZoomIn, ZoomOut, Trash2, Copy, Eye, EyeOff, Lock, Unlock,
   ChevronDown, ChevronRight, RotateCcw, Download, Clipboard, Plus, Minus,
   AlertTriangle, Bug, PlusCircle, XCircle, ArrowUpRight, RefreshCw, MessageSquare, HelpCircle,
-  Scissors, Spline, CornerDownRight, ArrowLeftRight, Hash, FileText, Undo2, Redo2
+  Scissors, Spline, CornerDownRight, ArrowLeftRight, Hash, FileText, Undo2, Redo2, Maximize2
 } from 'lucide-react'
 
 // ================== CONSTANTS ==================
@@ -23,7 +23,8 @@ const TOOLS = {
   PEN: 'pen',
   RECT_SELECT: 'rect_select',
   LASSO_SELECT: 'lasso_select',
-  LABEL: 'label'
+  LABEL: 'label',
+  TRANSFORM: 'transform'
 }
 
 const LABEL_PRESETS = [
@@ -326,6 +327,10 @@ export function MockupAnnotator({ isOpen, onClose }) {
   const [isDraggingObject, setIsDraggingObject] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
+  // Transform tool state
+  const [transformHandle, setTransformHandle] = useState(null) // 'tl','tr','bl','br','rotate'
+  const [transformStart, setTransformStart] = useState(null) // { x, y, bounds, rotation, scaleX, scaleY }
+
   // Tool state
   const [activeTool, setActiveTool] = useState(TOOLS.SELECT)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -455,6 +460,19 @@ export function MockupAnnotator({ isOpen, onClose }) {
         // Set opacity
         ctx.globalAlpha = obj.opacity ?? 1
 
+        // Apply rotation/scale transforms
+        if (obj.rotation || obj.scaleX !== undefined || obj.scaleY !== undefined) {
+          const bounds = getObjectBounds(obj)
+          const cx = bounds.x + bounds.width / 2
+          const cy = bounds.y + bounds.height / 2
+          ctx.translate(cx, cy)
+          if (obj.rotation) ctx.rotate(obj.rotation)
+          if (obj.scaleX !== undefined || obj.scaleY !== undefined) {
+            ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1)
+          }
+          ctx.translate(-cx, -cy)
+        }
+
         switch (obj.type) {
           case 'image':
             if (obj.image) {
@@ -553,13 +571,64 @@ export function MockupAnnotator({ isOpen, onClose }) {
 
         // Draw selection box (skip for images, labels, and arrows)
         const skipSelection = ['image', 'label', 'arrow', 'dashed_arrow', 'elbow_arrow', 'curved_arrow', 'bidirectional', 'rectangle', 'ellipse']
-        if (obj.id === selectedObjectId && !skipSelection.includes(obj.type)) {
+        if (obj.id === selectedObjectId && !skipSelection.includes(obj.type) && activeTool !== TOOLS.TRANSFORM) {
           ctx.strokeStyle = '#00bfff'
           ctx.lineWidth = 2 / zoom
           ctx.setLineDash([5 / zoom, 5 / zoom])
           const bounds = getObjectBounds(obj)
           ctx.strokeRect(bounds.x - 5, bounds.y - 5, bounds.width + 10, bounds.height + 10)
           ctx.setLineDash([])
+        }
+
+        // Draw transform bounding box with handles (in transformed space)
+        if (obj.id === selectedObjectId && activeTool === TOOLS.TRANSFORM) {
+
+          const bounds = getObjectBounds(obj)
+          const pad = 8
+          const bx = bounds.x - pad
+          const by = bounds.y - pad
+          const bw = bounds.width + pad * 2
+          const bh = bounds.height + pad * 2
+          const handleSize = 8 / zoom
+          const rotateOffset = 30 / zoom
+
+          // Bounding box
+          ctx.strokeStyle = '#00bfff'
+          ctx.lineWidth = 1.5 / zoom
+          ctx.setLineDash([])
+          ctx.strokeRect(bx, by, bw, bh)
+
+          // Corner handles (scale)
+          const corners = [
+            { x: bx, y: by },                  // top-left
+            { x: bx + bw, y: by },             // top-right
+            { x: bx, y: by + bh },             // bottom-left
+            { x: bx + bw, y: by + bh }         // bottom-right
+          ]
+          corners.forEach(c => {
+            ctx.fillStyle = '#fff'
+            ctx.strokeStyle = '#00bfff'
+            ctx.lineWidth = 1.5 / zoom
+            ctx.fillRect(c.x - handleSize / 2, c.y - handleSize / 2, handleSize, handleSize)
+            ctx.strokeRect(c.x - handleSize / 2, c.y - handleSize / 2, handleSize, handleSize)
+          })
+
+          // Rotation handle (above top center)
+          const rcx = bx + bw / 2
+          const rcy = by - rotateOffset
+          ctx.beginPath()
+          ctx.moveTo(rcx, by)
+          ctx.lineTo(rcx, rcy)
+          ctx.strokeStyle = '#00bfff'
+          ctx.lineWidth = 1.5 / zoom
+          ctx.stroke()
+
+          ctx.beginPath()
+          ctx.arc(rcx, rcy, handleSize / 2, 0, Math.PI * 2)
+          ctx.fillStyle = '#fff'
+          ctx.fill()
+          ctx.strokeStyle = '#00bfff'
+          ctx.stroke()
         }
 
         // Draw sequence number badge
@@ -1055,6 +1124,68 @@ export function MockupAnnotator({ isOpen, onClose }) {
       }
     }
 
+    // Transform tool: detect handle clicks or object selection
+    if (activeTool === TOOLS.TRANSFORM) {
+      if (selectedObjectId) {
+        const obj = objects.find(o => o.id === selectedObjectId)
+        if (obj) {
+          const bounds = getObjectBounds(obj)
+          const cx = bounds.x + bounds.width / 2
+          const cy = bounds.y + bounds.height / 2
+          const rotation = obj.rotation || 0
+          const sx = obj.scaleX ?? 1
+          const sy = obj.scaleY ?? 1
+
+          // Transform point into object's local space (inverse of rotation+scale around center)
+          const dx = point.x - cx
+          const dy = point.y - cy
+          const cosR = Math.cos(-rotation)
+          const sinR = Math.sin(-rotation)
+          const rx = dx * cosR - dy * sinR
+          const ry = dx * sinR + dy * cosR
+          const localPoint = { x: rx / sx + cx, y: ry / sy + cy }
+
+          const pad = 8
+          const bx = bounds.x - pad
+          const by = bounds.y - pad
+          const bw = bounds.width + pad * 2
+          const bh = bounds.height + pad * 2
+          const handleSize = 8 / zoom
+          const rotateOffset = 30 / zoom
+          const hitRadius = handleSize
+
+          // Check rotation handle
+          const rcx = bx + bw / 2
+          const rcy = by - rotateOffset
+          if (Math.hypot(localPoint.x - rcx, localPoint.y - rcy) <= hitRadius) {
+            setTransformHandle('rotate')
+            setTransformStart({ x: point.x, y: point.y, bounds, rotation, scaleX: sx, scaleY: sy })
+            return
+          }
+
+          // Check corner handles
+          const corners = [
+            { key: 'tl', x: bx, y: by },
+            { key: 'tr', x: bx + bw, y: by },
+            { key: 'bl', x: bx, y: by + bh },
+            { key: 'br', x: bx + bw, y: by + bh }
+          ]
+          for (const c of corners) {
+            if (Math.abs(localPoint.x - c.x) <= hitRadius && Math.abs(localPoint.y - c.y) <= hitRadius) {
+              setTransformHandle(c.key)
+              setTransformStart({ x: point.x, y: point.y, bounds, rotation, scaleX: sx, scaleY: sy })
+              return
+            }
+          }
+        }
+      }
+
+      // No auto-select in transform mode, just pan on empty space
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - offset.x, y: e.clientY - offset.y })
+      return
+    }
+
     // Start drawing
     if ([TOOLS.RECTANGLE, TOOLS.ELLIPSE, TOOLS.LINE, TOOLS.ARROW, TOOLS.ELBOW_ARROW,
          TOOLS.CURVED_ARROW, TOOLS.BIDIRECTIONAL, TOOLS.DASHED_ARROW, TOOLS.RECT_SELECT,
@@ -1135,6 +1266,40 @@ export function MockupAnnotator({ isOpen, onClose }) {
       return
     }
 
+    // Transform handle dragging
+    if (transformHandle && transformStart && selectedObjectId) {
+      const point = getCanvasPoint(e, canvasRef, offset, zoom)
+      const { bounds } = transformStart
+      const cx = bounds.x + bounds.width / 2
+      const cy = bounds.y + bounds.height / 2
+
+      if (transformHandle === 'rotate') {
+        const angle = Math.atan2(point.y - cy, point.x - cx) - Math.atan2(transformStart.y - cy, transformStart.x - cx)
+        const newRotation = transformStart.rotation + angle
+        setObjects(prev => prev.map(obj =>
+          obj.id === selectedObjectId ? { ...obj, rotation: newRotation } : obj
+        ))
+      } else {
+        // Scale based on corner drag distance
+        const startDist = Math.hypot(transformStart.x - cx, transformStart.y - cy)
+        const currentDist = Math.hypot(point.x - cx, point.y - cy)
+        const scaleFactor = currentDist / (startDist || 1)
+
+        // Determine which axes to scale
+        let newScaleX = transformStart.scaleX * scaleFactor
+        let newScaleY = transformStart.scaleY * scaleFactor
+
+        // Clamp to prevent inversion
+        newScaleX = Math.max(0.1, newScaleX)
+        newScaleY = Math.max(0.1, newScaleY)
+
+        setObjects(prev => prev.map(obj =>
+          obj.id === selectedObjectId ? { ...obj, scaleX: newScaleX, scaleY: newScaleY } : obj
+        ))
+      }
+      return
+    }
+
     if (!isDrawing || !drawStart) return
 
     const point = getCanvasPoint(e, canvasRef, offset, zoom)
@@ -1144,7 +1309,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     } else {
       setCurrentPath([point])
     }
-  }, [isPanning, panStart, isDraggingObject, selectedObjectId, dragOffset, isDrawing, drawStart, activeTool, offset, zoom])
+  }, [isPanning, panStart, isDraggingObject, selectedObjectId, dragOffset, isDrawing, drawStart, activeTool, offset, zoom, transformHandle, transformStart])
 
   const handleMouseUp = useCallback((e) => {
     if (isPanning) {
@@ -1158,6 +1323,12 @@ export function MockupAnnotator({ isOpen, onClose }) {
         deleteObject(selectedObjectId)
       }
       setIsDraggingObject(false)
+      return
+    }
+
+    if (transformHandle) {
+      setTransformHandle(null)
+      setTransformStart(null)
       return
     }
 
@@ -1349,7 +1520,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
     setIsDrawing(false)
     setDrawStart(null)
     setCurrentPath([])
-  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerIds, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom])
+  }, [isPanning, isDraggingObject, isDrawing, drawStart, activeTool, selectedLayerIds, layers, objects, currentPath, sequenceMode, nextSequenceNumber, offset, zoom, transformHandle])
 
   // Double click for text editing
   const handleDoubleClick = useCallback((e) => {
@@ -2231,6 +2402,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
         {/* Left toolbar */}
         <div className="w-12 bg-[#1a1a1a] border-r border-gray-700 flex flex-col items-center py-2 gap-1">
           <ToolButton icon={Move} tool={TOOLS.SELECT} active={activeTool} setActive={setActiveTool} tooltip="Move (V)" />
+          <ToolButton icon={Maximize2} tool={TOOLS.TRANSFORM} active={activeTool} setActive={setActiveTool} tooltip="Rotate/Scale" />
           <div className="w-8 h-px bg-gray-700 my-1" />
           <ToolButton icon={Square} tool={TOOLS.RECTANGLE} active={activeTool} setActive={setActiveTool} tooltip="Rectangle (R)" />
           <ToolButton icon={Circle} tool={TOOLS.ELLIPSE} active={activeTool} setActive={setActiveTool} tooltip="Ellipse (E)" />
@@ -2266,7 +2438,7 @@ export function MockupAnnotator({ isOpen, onClose }) {
               setContextMenuPosition({ x: e.clientX, y: e.clientY })
               setShowContextMenu(true)
             }}
-            className={`${isPanning ? 'cursor-grabbing' : activeTool === TOOLS.SELECT ? 'cursor-default' : 'cursor-crosshair'}`}
+            className={`${isPanning ? 'cursor-grabbing' : (activeTool === TOOLS.SELECT || activeTool === TOOLS.TRANSFORM) ? 'cursor-default' : 'cursor-crosshair'}`}
           />
 
           {/* Zoom controls */}
