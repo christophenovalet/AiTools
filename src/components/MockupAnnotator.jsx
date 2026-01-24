@@ -5,7 +5,8 @@ import {
   Image, Layers, ZoomIn, ZoomOut, Trash2, Copy, Eye, EyeOff, Lock, Unlock,
   ChevronDown, ChevronRight, RotateCcw, Download, Clipboard, Plus, Minus,
   AlertTriangle, Bug, PlusCircle, XCircle, ArrowUpRight, RefreshCw, MessageSquare, HelpCircle,
-  Scissors, Spline, CornerDownRight, ArrowLeftRight, Hash, FileText, Undo2, Redo2, Maximize2
+  Scissors, Spline, CornerDownRight, ArrowLeftRight, Hash, FileText, Undo2, Redo2, Maximize2,
+  Upload
 } from 'lucide-react'
 
 const SquareDashed = ({ className }) => (
@@ -436,6 +437,9 @@ export function MockupAnnotator({ isOpen, onClose }) {
   // Foreground color (persisted)
   const [fgColor, setFgColor] = useState(() => localStorage.getItem('annotator-fg-color') || '#ffffff')
   const fgColorInputRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragCounterRef = useRef(0)
 
   // Context menu
   const [showContextMenu, setShowContextMenu] = useState(false)
@@ -1140,6 +1144,8 @@ export function MockupAnnotator({ isOpen, onClose }) {
     }
 
     resizeCanvas()
+    // Auto-focus container so paste events work immediately
+    containerRef.current?.focus()
     window.addEventListener('resize', resizeCanvas)
     return () => window.removeEventListener('resize', resizeCanvas)
   }, [isOpen, renderCanvas])
@@ -1702,73 +1708,136 @@ export function MockupAnnotator({ isOpen, onClose }) {
     }
   }, [objects, offset, zoom])
 
-  // Paste handler for images
+  // Shared helper: load an image file (File/Blob) onto canvas
+  const loadImageFile = useCallback((file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    const img = new window.Image()
+    img.onload = () => {
+      const imageLayerId = generateId()
+      const newLayer = {
+        id: imageLayerId,
+        name: `Image ${layers.length}`,
+        type: 'image',
+        visible: true,
+        locked: false
+      }
+      let width = img.width
+      let height = img.height
+      const maxSize = 800
+      if (width > maxSize || height > maxSize) {
+        const scale = maxSize / Math.max(width, height)
+        width *= scale
+        height *= scale
+      }
+      const canvas = canvasRef.current
+      const canvasWidth = canvas ? canvas.width : 800
+      const canvasHeight = canvas ? canvas.height : 600
+      const centerX = (-offset.x + canvasWidth / 2) / zoom - width / 2
+      const centerY = (-offset.y + canvasHeight / 2) / zoom - height / 2
+      const newImage = {
+        id: generateId(),
+        type: 'image',
+        layerId: imageLayerId,
+        x: centerX,
+        y: centerY,
+        width,
+        height,
+        image: img,
+        opacity: 1
+      }
+      setLayers(prev => [...prev, newLayer])
+      setObjects(prev => [...prev, newImage])
+      setSelectedLayerIds([imageLayerId])
+    }
+    img.src = URL.createObjectURL(file)
+  }, [layers.length, offset, zoom])
+
+  // Paste handler for images (supports both desktop and iOS)
   useEffect(() => {
     if (!isOpen) return
 
     const handlePaste = (e) => {
-      const items = e.clipboardData?.items
-      if (!items) return
+      const clipData = e.clipboardData
+      if (!clipData) return
 
-      for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          e.preventDefault()
-          e.stopPropagation()
-          const blob = item.getAsFile()
-          const img = new window.Image()
-          img.onload = () => {
-            // Create new image layer
-            const imageLayerId = generateId()
-            const newLayer = {
-              id: imageLayerId,
-              name: `Image ${layers.length}`,
-              type: 'image',
-              visible: true,
-              locked: false
-            }
-
-            // Scale to fit if too large
-            let width = img.width
-            let height = img.height
-            const maxSize = 800
-            if (width > maxSize || height > maxSize) {
-              const scale = maxSize / Math.max(width, height)
-              width *= scale
-              height *= scale
-            }
-
-            // Place image at center of visible canvas
-            const canvas = canvasRef.current
-            const canvasWidth = canvas ? canvas.width : 800
-            const canvasHeight = canvas ? canvas.height : 600
-            const centerX = (-offset.x + canvasWidth / 2) / zoom - width / 2
-            const centerY = (-offset.y + canvasHeight / 2) / zoom - height / 2
-
-            const newImage = {
-              id: generateId(),
-              type: 'image',
-              layerId: imageLayerId,
-              x: centerX,
-              y: centerY,
-              width,
-              height,
-              image: img,
-              opacity: 1
-            }
-
-            setLayers([...layers, newLayer])
-            setObjects([...objects, newImage])
-            setSelectedLayerIds([imageLayerId])
+      // Try clipboardData.items first (Chrome/Firefox desktop)
+      if (clipData.items) {
+        for (const item of clipData.items) {
+          if (item.type.startsWith('image/')) {
+            e.preventDefault()
+            e.stopPropagation()
+            loadImageFile(item.getAsFile())
+            return
           }
-          img.src = URL.createObjectURL(blob)
-          break
+        }
+      }
+
+      // Fallback to clipboardData.files (iOS Safari)
+      if (clipData.files && clipData.files.length > 0) {
+        for (const file of clipData.files) {
+          if (file.type.startsWith('image/')) {
+            e.preventDefault()
+            e.stopPropagation()
+            loadImageFile(file)
+            return
+          }
         }
       }
     }
 
     document.addEventListener('paste', handlePaste, true)
     return () => document.removeEventListener('paste', handlePaste, true)
-  }, [isOpen, layers, objects, offset, zoom])
+  }, [isOpen, loadImageFile])
+
+  // Drag & drop handlers
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current++
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true)
+    }
+  }, [])
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    dragCounterRef.current = 0
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          loadImageFile(file)
+        }
+      }
+    }
+  }, [loadImageFile])
+
+  const handleFileInputChange = useCallback((e) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      for (const file of files) {
+        loadImageFile(file)
+      }
+    }
+    // Reset so same file can be selected again
+    e.target.value = ''
+  }, [loadImageFile])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2625,6 +2694,18 @@ export function MockupAnnotator({ isOpen, onClose }) {
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-bold text-gray-100">Visual Mockup Annotator</h1>
           <span className="text-xs text-gray-500">Paste image (Ctrl+V) or drag & drop</span>
+          <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200">
+            <Upload className="h-4 w-4 mr-1" />
+            Upload
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileInputChange}
+            className="hidden"
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={undo} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200" title="Undo (Ctrl+Z)">
@@ -2687,8 +2768,13 @@ export function MockupAnnotator({ isOpen, onClose }) {
         {/* Canvas */}
         <div
           ref={containerRef}
-          className="flex-1 relative overflow-hidden cursor-crosshair"
+          tabIndex={-1}
+          className="flex-1 relative overflow-hidden cursor-crosshair outline-none"
           onWheel={handleWheel}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
         >
           <canvas
             ref={canvasRef}
@@ -2704,6 +2790,16 @@ export function MockupAnnotator({ isOpen, onClose }) {
             }}
             className={`${isPanning ? 'cursor-grabbing' : (activeTool === TOOLS.SELECT || activeTool === TOOLS.TRANSFORM) ? 'cursor-default' : 'cursor-crosshair'}`}
           />
+
+          {/* Drop overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/20 border-2 border-dashed border-blue-400 pointer-events-none">
+              <div className="flex flex-col items-center gap-2 text-blue-300">
+                <Upload className="h-12 w-12" />
+                <span className="text-lg font-medium">Drop image here</span>
+              </div>
+            </div>
+          )}
 
           {/* Zoom controls */}
           <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-[#1a1a1a] rounded-lg px-2 py-1 border border-gray-700">
